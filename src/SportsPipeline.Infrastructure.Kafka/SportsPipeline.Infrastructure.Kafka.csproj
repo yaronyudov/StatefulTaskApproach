@@ -1,7 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="Confluent.Kafka" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\SportsPipeline.Abstractions\SportsPipeline.Abstractions.csproj" />
+    <ProjectReference Include="..\SportsPipeline.Contracts\SportsPipeline.Contracts.csproj" />
     <ProjectReference Include="..\SportsPipeline.Domain\SportsPipeline.Domain.csproj" />
   </ItemGroup>
 

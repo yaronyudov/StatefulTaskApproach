@@ -13,9 +13,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SportsPipeline.Domain\SportsPipeline.Domain.csproj" />
+    <ProjectReference Include="..\..\src\SportsPipeline.Abstractions\SportsPipeline.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\SportsPipeline.Mapping\SportsPipeline.Mapping.csproj" />
     <ProjectReference Include="..\..\src\SportsPipeline.Scrapper\SportsPipeline.Scrapper.csproj" />
-    <ProjectReference Include="..\..\src\SportsPipeline.QueryApi\SportsPipeline.QueryApi.csproj" />
+    <ProjectReference Include="..\..\src\SportsPipeline.Infrastructure.OpenSearch\SportsPipeline.Infrastructure.OpenSearch.csproj" />
   </ItemGroup>
 
 </Project>

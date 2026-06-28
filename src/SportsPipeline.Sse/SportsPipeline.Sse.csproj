@@ -5,11 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Confluent.Kafka" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\SportsPipeline.Contracts\SportsPipeline.Contracts.csproj" />
+    <ProjectReference Include="..\SportsPipeline.Abstractions\SportsPipeline.Abstractions.csproj" />
+    <ProjectReference Include="..\SportsPipeline.Infrastructure.Kafka\SportsPipeline.Infrastructure.Kafka.csproj" />
   </ItemGroup>
 
 </Project>

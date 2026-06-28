@@ -5,8 +5,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="OpenSearch.Client" />
-    <PackageReference Include="MongoDB.Driver" />
+    <ProjectReference Include="..\SportsPipeline.Abstractions\SportsPipeline.Abstractions.csproj" />
+    <ProjectReference Include="..\SportsPipeline.Infrastructure.OpenSearch\SportsPipeline.Infrastructure.OpenSearch.csproj" />
+    <ProjectReference Include="..\SportsPipeline.Infrastructure.Mongo\SportsPipeline.Infrastructure.Mongo.csproj" />
   </ItemGroup>
 
 </Project>

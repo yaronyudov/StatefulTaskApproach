@@ -1,5 +1,6 @@
 using System.Text.Json;
-using SportsPipeline.QueryApi;
+using SportsPipeline.Abstractions;
+using SportsPipeline.Infrastructure.OpenSearch;
 using Xunit;
 
 namespace SportsPipeline.Tests;

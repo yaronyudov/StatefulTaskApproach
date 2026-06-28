@@ -1,7 +1,12 @@
+using Amazon.DynamoDBv2;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using SportsPipeline.Abstractions;
+using SportsPipeline.Infrastructure.DynamoDb;
+using SportsPipeline.Infrastructure.Files;
+using SportsPipeline.Infrastructure.Kafka;
 using SportsPipeline.Mapping;
 using SportsPipeline.Scrapper;
 
@@ -17,9 +22,12 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ResponseValidator>();
 builder.Services.AddSingleton<ProviderEventMapper>();
 
-// Local development uses the JSON mapping file; swap for DynamoDbMappingStore in AWS.
-builder.Services.AddSingleton<IMappingStore>(_ =>
-    JsonFileMappingStore.LoadAsync(options.MappingFilePath).GetAwaiter().GetResult());
+// Composition root: pick the mapping-store adapter by config ("file" for local, "dynamodb" for AWS).
+builder.Services.AddSingleton<IMappingStore>(_ => options.MappingStore.ToLowerInvariant() switch
+{
+    "dynamodb" => new DynamoDbMappingStore(new AmazonDynamoDBClient(), options.MappingTableName),
+    _ => JsonFileMappingStore.LoadAsync(options.MappingFilePath).GetAwaiter().GetResult(),
+});
 
 builder.Services.AddSingleton<IEventPublisher>(_ => new KafkaEventPublisher(options.Kafka));
 

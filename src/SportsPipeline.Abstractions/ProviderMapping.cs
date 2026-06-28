@@ -1,4 +1,4 @@
-namespace SportsPipeline.Mapping;
+namespace SportsPipeline.Abstractions;
 
 /// <summary>
 /// Maps a single domain field to a path in the provider payload, with an optional value-translation
@@ -8,8 +8,9 @@ namespace SportsPipeline.Mapping;
 public sealed record FieldMap(string SourcePath, IReadOnlyDictionary<string, string>? ValueMap = null);
 
 /// <summary>
-/// The full set of rules for translating one provider's payload into a domain <c>SportEvent</c>.
-/// This is the record stored in the mapping database, one per provider.
+/// The full set of rules for translating one provider's payload into a domain event. This is the
+/// record returned by the mapping store, one per provider. It is part of the port contract, so it
+/// lives in Abstractions (not in any concrete adapter).
 /// </summary>
 public sealed record ProviderMapping
 {

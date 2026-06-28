@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SportsPipeline.Abstractions\SportsPipeline.Abstractions.csproj" />
-    <ProjectReference Include="..\SportsPipeline.Domain\SportsPipeline.Domain.csproj" />
   </ItemGroup>
 
 </Project>

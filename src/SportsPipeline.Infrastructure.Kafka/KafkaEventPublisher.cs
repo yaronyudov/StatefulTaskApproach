@@ -1,25 +1,21 @@
 using Confluent.Kafka;
+using SportsPipeline.Abstractions;
 using SportsPipeline.Contracts;
 using SportsPipeline.Domain;
 
-namespace SportsPipeline.Scrapper;
-
-public interface IEventPublisher : IAsyncDisposable
-{
-    Task PublishAsync(SportEvent ev, CancellationToken cancellationToken);
-}
+namespace SportsPipeline.Infrastructure.Kafka;
 
 /// <summary>
-/// Publishes domain events to Kafka with an idempotent producer (acks=all, enable.idempotence=true)
-/// keyed by the match key. Keying by match key guarantees all events for a fixture land on the same
-/// partition and are therefore consumed in order by the stateful stream processor.
+/// <see cref="IEventPublisher"/> adapter: publishes domain events to Kafka with an idempotent
+/// producer (acks=all, enable.idempotence=true) keyed by the match key, so all events for a fixture
+/// land on one partition and are consumed in order by the stateful stage.
 /// </summary>
 public sealed class KafkaEventPublisher : IEventPublisher
 {
     private readonly IProducer<string, byte[]> _producer;
     private readonly string _topic;
 
-    public KafkaEventPublisher(KafkaOptions options)
+    public KafkaEventPublisher(KafkaPublisherOptions options)
     {
         var config = new ProducerConfig
         {

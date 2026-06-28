@@ -1,10 +1,11 @@
 using System.Text.Json;
+using SportsPipeline.Abstractions;
 
-namespace SportsPipeline.Mapping;
+namespace SportsPipeline.Infrastructure.Files;
 
 /// <summary>
-/// Development mapping store: loads all provider mappings from a single JSON file shaped as
-/// { "providerId": { ...ProviderMapping... }, ... }. Loaded once and cached.
+/// Development <see cref="IMappingStore"/> adapter: loads all provider mappings from a single JSON
+/// file shaped as { "providerId": { ...ProviderMapping... }, ... }. Loaded once and cached.
 /// </summary>
 public sealed class JsonFileMappingStore : IMappingStore
 {

@@ -22,16 +22,30 @@ Query API: search OpenSearch (find matchId) → fetch MongoDB (details)
 
 | Path | What |
 |---|---|
-| `src/SportsPipeline.Domain` | Domain DTOs + order-agnostic `MatchIdentity` |
+| `src/SportsPipeline.Domain` | Domain DTOs + order-agnostic `MatchIdentity` (no deps) |
+| `src/SportsPipeline.Abstractions` | **Ports**: `IMappingStore`, `IEventPublisher`, `IMatchSearchStore`, `IMatchDetailsStore`, `IDeltaHandler` + their DTOs |
 | `src/SportsPipeline.Contracts` | Kafka topic names + JSON contract |
-| `src/SportsPipeline.Mapping` | Provider→domain mapping (DynamoDB + local JSON) |
-| `src/SportsPipeline.Scrapper` | Config-driven poller: rate-limit, backoff, validate, publish |
-| `src/SportsPipeline.Sse` | SSE service: `match-deltas` → `text/event-stream` |
-| `src/SportsPipeline.QueryApi` | Discovery (OpenSearch) + details (MongoDB) API |
+| `src/SportsPipeline.Mapping` | Provider→domain mapping logic (`ProviderEventMapper`) |
+| `src/SportsPipeline.Infrastructure.Kafka` | Adapter: `KafkaEventPublisher`, `KafkaDeltaConsumer` |
+| `src/SportsPipeline.Infrastructure.DynamoDb` | Adapter: `DynamoDbMappingStore` |
+| `src/SportsPipeline.Infrastructure.Files` | Adapter: `JsonFileMappingStore` (local dev) |
+| `src/SportsPipeline.Infrastructure.OpenSearch` | Adapter: `OpenSearchMatchSearch` (discovery) |
+| `src/SportsPipeline.Infrastructure.Mongo` | Adapter: `MongoMatchDetails` (details) |
+| `src/SportsPipeline.Scrapper` | App: config-driven poller (rate-limit, backoff, validate, publish) |
+| `src/SportsPipeline.Sse` | App: SSE service, `match-deltas` → `text/event-stream` |
+| `src/SportsPipeline.QueryApi` | App: discovery (OpenSearch) + details (MongoDB) |
 | `flink/match_pipeline.sql` | Shipped Flink SQL classification (relaxed semantics) |
 | `flink/java/...` | Native Java `KeyedProcessFunction` (exact ±2h semantics) |
 | `tests/SportsPipeline.Tests` | Unit tests for the pure logic |
 | `deploy/` | docker-compose stack, Dockerfiles, mock provider, CDK skeleton |
+
+### Layering (Ports & Adapters)
+
+Dependencies point inward: `Domain` → `Abstractions` (ports) → apps. The **apps depend only on the
+port interfaces**; each concrete data/IO adapter lives in its own `Infrastructure.<tech>` project and
+is selected once in the app's `Program.cs` (composition root). So a service can swap OpenSearch, Mongo,
+Kafka, or DynamoDB without touching app logic, and each app pulls only the adapters it actually uses
+(the scrapper never references the Mongo/OpenSearch drivers).
 
 ## Build & test
 

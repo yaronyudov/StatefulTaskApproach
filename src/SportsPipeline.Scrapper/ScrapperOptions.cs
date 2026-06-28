@@ -1,13 +1,21 @@
+using SportsPipeline.Infrastructure.Kafka;
+
 namespace SportsPipeline.Scrapper;
 
 /// <summary>Root configuration for one scrapper instance. One instance serves exactly one provider.</summary>
 public sealed class ScrapperOptions
 {
     public ProviderConfig Provider { get; set; } = new();
-    public KafkaOptions Kafka { get; set; } = new();
+    public KafkaPublisherOptions Kafka { get; set; } = new();
 
-    /// <summary>Path to the local mapping JSON file (development). Ignored when DynamoDB is used.</summary>
+    /// <summary>Mapping store adapter to use: "file" (local) or "dynamodb" (AWS).</summary>
+    public string MappingStore { get; set; } = "file";
+
+    /// <summary>Path to the local mapping JSON file (used when MappingStore = "file").</summary>
     public string MappingFilePath { get; set; } = "providers.sample.json";
+
+    /// <summary>DynamoDB table name (used when MappingStore = "dynamodb").</summary>
+    public string MappingTableName { get; set; } = "provider-mappings";
 }
 
 public sealed class ProviderConfig
@@ -54,10 +62,4 @@ public sealed class ValidationOptions
 
     /// <summary>Reject events whose timestamps fall outside +/- this many days from now (sanity bound).</summary>
     public int MaxTimestampSkewDays { get; set; } = 365;
-}
-
-public sealed class KafkaOptions
-{
-    public string BootstrapServers { get; set; } = "localhost:9092";
-    public string Topic { get; set; } = SportsPipeline.Contracts.Topics.IngestedEvents;
 }

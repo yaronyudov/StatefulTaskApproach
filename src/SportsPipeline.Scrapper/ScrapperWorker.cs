@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using SportsPipeline.Abstractions;
 using SportsPipeline.Mapping;
 
 namespace SportsPipeline.Scrapper;

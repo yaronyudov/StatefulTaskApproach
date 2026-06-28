@@ -1,15 +1,6 @@
-namespace SportsPipeline.QueryApi;
+using SportsPipeline.Abstractions;
 
-/// <summary>
-/// The discovery query parameters. Any combination of 1–4 may be supplied; absent ones are skipped.
-/// </summary>
-public sealed record QueryParams(
-    DateTimeOffset? From = null,
-    DateTimeOffset? To = null,
-    string? Sport = null,
-    string? Competition = null,
-    string? Team = null,
-    int Size = 50);
+namespace SportsPipeline.Infrastructure.OpenSearch;
 
 /// <summary>
 /// Builds the OpenSearch request body for the discovery search as a plain dictionary tree. Kept free

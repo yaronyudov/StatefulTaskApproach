@@ -1,14 +1,14 @@
 using System.Text.Json;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
+using SportsPipeline.Abstractions;
 
-namespace SportsPipeline.Mapping;
+namespace SportsPipeline.Infrastructure.DynamoDb;
 
 /// <summary>
-/// Production mapping store. Each item is keyed by <c>providerId</c> and carries a single
-/// <c>mappingJson</c> attribute containing the serialized <see cref="ProviderMapping"/>. Storing the
-/// rules as a JSON blob keeps the table schema-stable as mapping rules evolve, and keeps reads to a
-/// single <c>GetItem</c> on the partition key.
+/// Production <see cref="IMappingStore"/> adapter. Each item is keyed by <c>providerId</c> and carries
+/// a single <c>mappingJson</c> attribute containing the serialized <see cref="ProviderMapping"/>.
+/// Storing the rules as a JSON blob keeps the table schema-stable and reads to a single GetItem.
 /// </summary>
 public sealed class DynamoDbMappingStore(IAmazonDynamoDB client, string tableName) : IMappingStore
 {

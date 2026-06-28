@@ -1,10 +1,14 @@
+using SportsPipeline.Abstractions;
+using SportsPipeline.Infrastructure.Kafka;
 using SportsPipeline.Sse;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var options = builder.Configuration.GetSection("Sse").Get<SseOptions>() ?? new SseOptions();
-builder.Services.AddSingleton(options);
+var consumerOptions = builder.Configuration.GetSection("Sse").Get<KafkaConsumerOptions>() ?? new KafkaConsumerOptions();
+builder.Services.AddSingleton(consumerOptions);
 builder.Services.AddSingleton<DeltaBroker>();
+// Composition root: the Kafka consumer adapter forwards deltas to the app's broker via the port.
+builder.Services.AddSingleton<IDeltaHandler, BrokerDeltaHandler>();
 builder.Services.AddHostedService<KafkaDeltaConsumer>();
 
 var app = builder.Build();

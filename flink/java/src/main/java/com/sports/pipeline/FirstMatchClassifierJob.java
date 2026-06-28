@@ -7,6 +7,7 @@ import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.json.JsonMapper;
@@ -14,13 +15,15 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.json.Json
 import java.time.Duration;
 
 /**
- * Native-Java equivalent of flink/match_pipeline.sql, but with the EXACT +/-2h-from-first semantics
- * (see {@link FirstMatchClassifier}). Wiring: Kafka source -> keyBy(matchKey) -> classifier ->
- * Kafka sinks. The OpenSearch (first only) and MongoDB (deltas) sinks are added the same way using
- * flink-connector-opensearch / flink-connector-mongodb; only the match-deltas sink is shown here to
- * keep the reference focused.
+ * Native-Java equivalent of flink/match_pipeline.sql with the EXACT +/-2h-from-first semantics and a
+ * window-close final write (see {@link FirstMatchClassifier}).
  *
- * <p>Build: {@code mvn -f flink/java/pom.xml package}; submit the shaded jar with {@code flink run}.
+ * Wiring:
+ *   main output            -> first-match-events (new game)         + OpenSearch discovery
+ *   FINAL_STATE side output-> Mongo/Atlas (ONE write per window)
+ *   LIVE_UPDATES side out  -> match-deltas for SSE   (COMMENTED OUT: this is the live path / hot path)
+ *
+ * Build: {@code mvn -f flink/java/pom.xml package}; submit with {@code flink run}.
  */
 public class FirstMatchClassifierJob {
 
@@ -45,31 +48,47 @@ public class FirstMatchClassifierJob {
                 .map(json -> mapper.readValue(json, SportEvent.class))
                 .returns(SportEvent.class);
 
-        DataStream<ClassifiedEvent> classified = events
+        SingleOutputStreamOperator<ClassifiedEvent> classified = events
                 .keyBy(SportEvent::matchKey)
                 .process(new FirstMatchClassifier());
 
-        // match-deltas: keyed by matchId so the SSE service can route by document id.
-        KafkaSink<ClassifiedEvent> deltas = KafkaSink.<ClassifiedEvent>builder()
-                .setBootstrapServers(brokers)
-                .setRecordSerializer(KafkaRecordSerializationSchema.<ClassifiedEvent>builder()
-                        .setTopic("match-deltas")
-                        .setKeySerializationSchema((ClassifiedEvent c) -> c.matchId.getBytes())
-                        .setValueSerializationSchema((ClassifiedEvent c) -> serialize(mapper, c))
-                        .build())
-                .build();
+        // New game (first occurrence) -> first-match-events (and OpenSearch discovery, added the same way).
+        classified.sinkTo(kafka(brokers, "first-match-events", c -> c.matchId, c -> serialize(mapper, c)));
 
-        classified.sinkTo(deltas);
+        // FINAL match state -> ONE write per window. In production use the Flink MongoSink
+        // (flink-connector-mongodb) writing _id=matchId to Atlas; shown here as a Kafka stand-in.
+        classified.getSideOutput(FirstMatchClassifier.FINAL_STATE)
+                .sinkTo(kafka(brokers, "match-final", f -> f.matchId, f -> serialize(mapper, f)));
+        //  MongoSink.<FinalMatchState>builder()
+        //      .setUri(System.getenv("MONGO_URI"))            // Atlas SRV, tls=true, retryWrites=false
+        //      .setDatabase("sports").setCollection("matches")
+        //      .setSerializationSchema(new MongoUpsertById())  // _id = matchId
+        //      .build();
 
-        // first-match-events (tag A) and not-first-match-events (tag B) are filtered sinks added the
-        // same way: classified.filter(c -> c.tag.equals("A")).sinkTo(...); etc.
+        // LIVE-DATA-UPDATES PATH (COMMENTED OUT): per-event in-window deltas for SSE. Enabling this is
+        // the per-event write pattern we avoid for the details store; route it to Kafka/SSE only.
+        // classified.getSideOutput(FirstMatchClassifier.LIVE_UPDATES)
+        //         .sinkTo(kafka(brokers, "match-deltas", c -> c.matchId, c -> serialize(mapper, c)));
 
         env.execute("sports-first-match-classifier-java");
     }
 
-    private static byte[] serialize(ObjectMapper mapper, ClassifiedEvent c) {
+    private static <T> KafkaSink<T> kafka(String brokers, String topic,
+                                          java.util.function.Function<T, String> key,
+                                          java.util.function.Function<T, byte[]> value) {
+        return KafkaSink.<T>builder()
+                .setBootstrapServers(brokers)
+                .setRecordSerializer(KafkaRecordSerializationSchema.<T>builder()
+                        .setTopic(topic)
+                        .setKeySerializationSchema((T t) -> key.apply(t).getBytes())
+                        .setValueSerializationSchema(value::apply)
+                        .build())
+                .build();
+    }
+
+    private static byte[] serialize(ObjectMapper mapper, Object o) {
         try {
-            return mapper.writeValueAsBytes(c);
+            return mapper.writeValueAsBytes(o);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

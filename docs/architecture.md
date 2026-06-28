@@ -33,8 +33,8 @@ flowchart LR
   F -->|tag=A| FT[(first-match-events)]
   F -->|tag=B| NT[(not-first-match-events)]
   F -->|every row| D[(match-deltas)]
-  F -->|first only| OS[(OpenSearch\ndiscovery)]
-  F -->|deltas, upsert _id=matchId| MG[(DocumentDB\ndetails)]
+  F -->|first event, immediate| OS[(OpenSearch\ndiscovery)]
+  F -->|final state, 1 write/window| MG[(MongoDB Atlas\ndetails)]
   D --> SSE[SSE service]
   SSE -->|text/event-stream| U((Subscribers))
   Q[Query API] -->|search 1-4 params| OS
@@ -104,15 +104,33 @@ Flink SQL `MATCH_RECOGNIZE` is **`ONE ROW PER MATCH` only** and SQL cannot reset
 exact anchored ±2h **per-event** classification is not expressible in pure SQL.
 
 - **Shipped — `flink/match_pipeline.sql`**: relaxed rule (`LAG`: gap-from-previous > 2h = first),
-  per-event and instant, all I/O declarative (Kafka source; Kafka/OpenSearch/DocumentDB sinks).
+  per-event and instant, all I/O declarative (Kafka source; Kafka/OpenSearch/MongoDB-Atlas sinks).
   Its `matchId = matchKey + "_" + DATE_FORMAT(startTime,'yyyyMMdd')` — bucketed on **startTime**
   (constant per game) so a fixture spanning midnight stays one id; the Java version uses the exact
   anchor instead.
 - **Exact — `flink/java/.../FirstMatchClassifier.java`**: `KeyedProcessFunction` with a per-key anchor
   `ValueState` + state TTL implementing the precise spec and anchor-based `matchId`.
 
-Outputs: `first-match-events` (A), `not-first-match-events` (B), `match-deltas` (every row, keyed by
-matchId), OpenSearch (A only), MongoDB (every row, upsert by `_id`).
+### Write strategy (hot-path aware)
+
+- **OpenSearch (discovery)** ← the **first** event, written **immediately** (one small doc per match)
+  so a live match is searchable right away.
+- **MongoDB Atlas (details)** ← **one "final match state" write per window**, emitted when the window
+  **closes** (~2h). One write per match, not one-per-event — this keeps the details store off the
+  per-document hot path. The Java job does this with an event-time timer at `anchor+2h`; the SQL uses a
+  2h `SESSION` window aggregation.
+- **Live in-window updates** (`match-deltas` / `not-first-match-events`) are the **live-data-updates
+  path** and are **commented out by default** in `flink/match_pipeline.sql` and the Java job — enable
+  them to stream live deltas to SSE. They are deliberately off because writing each in-window update
+  one-by-one is exactly the hot path we avoid for the details store.
+
+> **Events vs. statistics — a known limitation not solved here.** This one-write-per-window model fits
+> match **events** well. Match **statistics** (possession %, shot counts, etc.) update far more
+> frequently and would reintroduce the Mongo/Atlas **hot path** (many rapid writes to the same
+> document). This is **not addressed** in this solution. The mitigation is to **batch** statistic
+> updates and **bulk-write "many" at once** (e.g. coalesce N seconds of updates, then one
+> `bulkWrite`) instead of massive one-by-one writes — and/or keep the live hot stats in Redis and
+> checkpoint periodically.
 
 ## 6. Live deltas over SSE
 
@@ -140,10 +158,10 @@ stays optional as a live-snapshot/TTL cache.
 - **OpenSearch = discovery.** First-match rows only → one lightweight doc per match. `GET /matches`
   builds a `bool` filter from any 1–4 of {time range, sport, competition, team}; the team filter hits
   the order-agnostic `teams` array (`MatchQueryBuilder.cs`). Returns `matchId`s.
-- **Amazon DocumentDB (Mongo-compatible) = details.** `GET /matches/{matchId}` is a point lookup by
-  `_id` — read-your-write fresh. DocumentDB scales reads via replicas; writes hit a single primary
-  (no sharding), so size the primary and use per-event/bucketed docs. Connection needs `tls=true` +
-  the RDS CA bundle + `retryWrites=false`.
+- **MongoDB Atlas (on AWS) = details.** `GET /matches/{matchId}` is a point lookup by `_id` —
+  read-your-write fresh. Atlas gives HA replica sets, read replicas, and **sharding** if writes ever
+  outgrow one primary (shard key = hashed `matchId`). Connection: Atlas SRV uri, `tls=true`,
+  `retryWrites=false`, secret in Secrets Manager; connect via PrivateLink.
 
 This split means search load (OpenSearch) and detail load (Mongo) are isolated from each other **and**
 from ingestion. Why two stores: OpenSearch's inverted index is ideal for ad-hoc multi-field discovery;
@@ -174,8 +192,8 @@ time-based indices + ISM and a Mongo TTL/archival policy for long-term retention
 ## 10. AWS mapping (see `deploy/iac`)
 
 MSK (Kafka) · Amazon Managed Service for Apache Flink (runs the SQL or Java job) · OpenSearch Service
-(discovery) · Amazon DocumentDB (details) · DynamoDB (mapping) · ECS Fargate (scrapper-per-provider,
-sse, query-api) · Secrets Manager · optional ElastiCache Redis · ALB.
+(discovery) · MongoDB Atlas on AWS (details, via PrivateLink) · DynamoDB (mapping) · ECS Fargate
+(scrapper-per-provider, sse, query-api) · Secrets Manager · optional ElastiCache Redis · ALB.
 
 ## 11. Future work
 

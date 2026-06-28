@@ -1,0 +1,29 @@
+<Project>
+
+  <!-- Central Package Management: every package version is declared once here; csproj files
+       reference packages without a Version attribute. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Runtime -->
+    <PackageVersion Include="AWSSDK.DynamoDBv2" Version="3.7.405.4" />
+    <PackageVersion Include="Confluent.Kafka" Version="2.6.1" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Polly" Version="8.0.11" />
+    <PackageVersion Include="System.Threading.RateLimiting" Version="8.0.0" />
+    <PackageVersion Include="OpenSearch.Client" Version="1.8.0" />
+    <PackageVersion Include="MongoDB.Driver" Version="2.28.0" />
+
+    <!-- Test -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageVersion Include="xunit" Version="2.9.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+
+    <!-- Infrastructure (deploy/iac, not part of the solution build) -->
+    <PackageVersion Include="Amazon.CDK.Lib" Version="2.150.0" />
+    <PackageVersion Include="Constructs" Version="10.3.0" />
+  </ItemGroup>
+
+</Project>

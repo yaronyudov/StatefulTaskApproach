@@ -17,6 +17,8 @@ app.MapGet("/subscribe/{matchId}", async (string matchId, DeltaBroker broker, Ht
     ctx.Response.Headers.ContentType = "text/event-stream";
     ctx.Response.Headers.CacheControl = "no-cache";
     ctx.Response.Headers.Connection = "keep-alive";
+    // Stream each event to the client immediately rather than buffering the response.
+    ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
 
     var (id, reader) = broker.Subscribe(matchId);
     try

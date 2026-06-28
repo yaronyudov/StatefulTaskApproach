@@ -22,7 +22,7 @@ public sealed class SportsPipelineStack : Stack
         // Mapping database (provider -> domain translation rules), keyed by providerId.
         _ = new Table(this, "MappingTable", new TableProps
         {
-            PartitionKey = new Attribute { Name = "providerId", Type = AttributeType.STRING },
+            PartitionKey = new Amazon.CDK.AWS.DynamoDB.Attribute { Name = "providerId", Type = AttributeType.STRING },
             BillingMode = BillingMode.PAY_PER_REQUEST,
         });
 

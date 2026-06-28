@@ -52,8 +52,11 @@ public sealed class ProviderPoller : IDisposable
         response.EnsureSuccessStatusCode();
         _validator.ValidateTransport(response, response.Content.Headers.ContentLength);
 
+        // Enforce the byte cap WHILE reading: a chunked response has no Content-Length, so the
+        // transport check above can't catch an oversized (or malicious) body on its own.
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        var bytes = await ReadCappedAsync(stream, _config.Validation.MaxResponseBytes, cancellationToken);
+        using var document = JsonDocument.Parse(bytes);
 
         if (document.RootElement.ValueKind != JsonValueKind.Array)
         {
@@ -63,6 +66,25 @@ public sealed class ProviderPoller : IDisposable
         var events = document.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
         _validator.ValidatePayloadSize(events.Count);
         return events;
+    }
+
+    /// <summary>Reads a stream into memory, aborting if it exceeds <paramref name="maxBytes"/>.</summary>
+    private static async Task<byte[]> ReadCappedAsync(Stream stream, long maxBytes, CancellationToken cancellationToken)
+    {
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(chunk, cancellationToken)) > 0)
+        {
+            if (buffer.Length + read > maxBytes)
+            {
+                throw new ValidationException($"Response exceeded the {maxBytes} byte limit.");
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        return buffer.ToArray();
     }
 
     public void Dispose() => _rateLimiter.Dispose();

@@ -1,0 +1,6 @@
+{
+  "app": "dotnet run --project SportsPipeline.Infra.csproj",
+  "context": {
+    "@aws-cdk/core:newStyleStackSynthesis": true
+  }
+}

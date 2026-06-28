@@ -2,6 +2,7 @@ using Amazon.CDK;
 using Amazon.CDK.AWS.EC2;
 using Amazon.CDK.AWS.ECS;
 using Amazon.CDK.AWS.DynamoDB;
+using Amazon.CDK.AWS.DocDB;
 using Amazon.CDK.AWS.OpenSearchService;
 using Constructs;
 
@@ -34,6 +35,17 @@ public sealed class SportsPipelineStack : Stack
             Capacity = new CapacityConfig { DataNodes = 2 },
         });
 
+        // Details / system of record: Amazon DocumentDB (native AWS, Mongo wire-compatible). Flink
+        // upserts deltas here by _id=matchId; the Query API does point lookups by id. Reads scale via
+        // replicas; writes go to the single primary (no sharding) so size the primary accordingly.
+        _ = new DatabaseCluster(this, "Details", new DatabaseClusterProps
+        {
+            MasterUser = new Login { Username = "pipeline" },   // password in Secrets Manager
+            InstanceType = InstanceType.Of(InstanceClass.MEMORY5, InstanceSize.LARGE),
+            Instances = 2,                                       // 1 primary + 1 read replica
+            Vpc = vpc,
+        });
+
         // ECS cluster hosting the C# services (one scrapper service per provider, sse, query-api).
         var cluster = new Cluster(this, "Cluster", new ClusterProps { Vpc = vpc });
         AddFargateService(cluster, "ScrapperProviderA");  // one per provider (blast-radius isolation)
@@ -44,7 +56,6 @@ public sealed class SportsPipelineStack : Stack
         // CfnResource / dedicated constructs when deploying:
         //   * Amazon MSK (Kafka)  -> CfnCluster
         //   * Amazon Managed Service for Apache Flink (runs match_pipeline.sql / the Java jar)
-        //   * Amazon DocumentDB cluster (Mongo-compatible details store)
         //   * Secrets Manager (provider credentials referenced by ProviderConfig.AuthSecretName)
         //   * optional ElastiCache Redis (SSE live snapshot/TTL backplane)
         //   * ALB fronting Sse + QueryApi

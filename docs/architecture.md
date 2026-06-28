@@ -34,7 +34,7 @@ flowchart LR
   F -->|tag=B| NT[(not-first-match-events)]
   F -->|every row| D[(match-deltas)]
   F -->|first only| OS[(OpenSearch\ndiscovery)]
-  F -->|deltas, upsert _id=matchId| MG[(MongoDB\ndetails)]
+  F -->|deltas, upsert _id=matchId| MG[(DocumentDB\ndetails)]
   D --> SSE[SSE service]
   SSE -->|text/event-stream| U((Subscribers))
   Q[Query API] -->|search 1-4 params| OS
@@ -104,7 +104,10 @@ Flink SQL `MATCH_RECOGNIZE` is **`ONE ROW PER MATCH` only** and SQL cannot reset
 exact anchored ±2h **per-event** classification is not expressible in pure SQL.
 
 - **Shipped — `flink/match_pipeline.sql`**: relaxed rule (`LAG`: gap-from-previous > 2h = first),
-  per-event and instant, all I/O declarative (Kafka source; Kafka/OpenSearch/MongoDB sinks).
+  per-event and instant, all I/O declarative (Kafka source; Kafka/OpenSearch/DocumentDB sinks).
+  Its `matchId = matchKey + "_" + DATE_FORMAT(startTime,'yyyyMMdd')` — bucketed on **startTime**
+  (constant per game) so a fixture spanning midnight stays one id; the Java version uses the exact
+  anchor instead.
 - **Exact — `flink/java/.../FirstMatchClassifier.java`**: `KeyedProcessFunction` with a per-key anchor
   `ValueState` + state TTL implementing the precise spec and anchor-based `matchId`.
 
@@ -137,7 +140,10 @@ stays optional as a live-snapshot/TTL cache.
 - **OpenSearch = discovery.** First-match rows only → one lightweight doc per match. `GET /matches`
   builds a `bool` filter from any 1–4 of {time range, sport, competition, team}; the team filter hits
   the order-agnostic `teams` array (`MatchQueryBuilder.cs`). Returns `matchId`s.
-- **MongoDB = details.** `GET /matches/{matchId}` is a point lookup by `_id` — read-your-write fresh.
+- **Amazon DocumentDB (Mongo-compatible) = details.** `GET /matches/{matchId}` is a point lookup by
+  `_id` — read-your-write fresh. DocumentDB scales reads via replicas; writes hit a single primary
+  (no sharding), so size the primary and use per-event/bucketed docs. Connection needs `tls=true` +
+  the RDS CA bundle + `retryWrites=false`.
 
 This split means search load (OpenSearch) and detail load (Mongo) are isolated from each other **and**
 from ingestion. Why two stores: OpenSearch's inverted index is ideal for ad-hoc multi-field discovery;
@@ -168,7 +174,7 @@ time-based indices + ISM and a Mongo TTL/archival policy for long-term retention
 ## 10. AWS mapping (see `deploy/iac`)
 
 MSK (Kafka) · Amazon Managed Service for Apache Flink (runs the SQL or Java job) · OpenSearch Service
-(discovery) · DocumentDB/MongoDB (details) · DynamoDB (mapping) · ECS Fargate (scrapper-per-provider,
+(discovery) · Amazon DocumentDB (details) · DynamoDB (mapping) · ECS Fargate (scrapper-per-provider,
 sse, query-api) · Secrets Manager · optional ElastiCache Redis · ALB.
 
 ## 11. Future work

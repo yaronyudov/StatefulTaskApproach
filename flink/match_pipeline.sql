@@ -52,7 +52,9 @@ CREATE TABLE ingested_events (
 -- ---------- Classification view (relaxed: gap-from-previous > 2h = first) -----
 CREATE TEMPORARY VIEW classified AS
 SELECT
-  matchKey || '_' || DATE_FORMAT(CAST(eventTime AS TIMESTAMP(3)), 'yyyyMMdd') AS matchId,
+  -- Bucket on startTime (constant for every event of a game) so a game that spans midnight
+  -- (e.g. 23:00 -> 01:00) stays under ONE matchId. Bucketing on eventTime would split it.
+  matchKey || '_' || DATE_FORMAT(CAST(startTime AS TIMESTAMP(3)), 'yyyyMMdd') AS matchId,
   matchKey, sportType, competitionType, startTime, eventTime,
   homeTeam, awayTeam, metadata,
   CASE

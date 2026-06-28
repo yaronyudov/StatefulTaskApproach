@@ -18,9 +18,11 @@ public static class MatchQueryBuilder
             var range = new Dictionary<string, object>();
             if (p.From is { } from) range["gte"] = from.UtcDateTime.ToString("o");
             if (p.To is { } to) range["lte"] = to.UtcDateTime.ToString("o");
-            filters.Add(new Dictionary<string, object> { ["range"] = new Dictionary<string, object> { ["eventTime"] = range } });
+            filters.Add(new Dictionary<string, object> { ["range"] = new Dictionary<string, object> { ["startTime"] = range } });
         }
 
+        // These fields should not be hard coded in here but externally exposed to ensure proper naming will be across entire project -> same goes for ALL over the proect
+        // Doing so would require potentially more classes to be used and I want to keep it simple for this task and not blowup with more classes than I already have to ensure this is still readable
         if (!string.IsNullOrWhiteSpace(p.Sport))
         {
             filters.Add(Term("sport", p.Sport));
@@ -40,7 +42,7 @@ public static class MatchQueryBuilder
         return new Dictionary<string, object?>
         {
             ["size"] = Math.Clamp(p.Size, 1, 1000),
-            ["sort"] = new object[] { new Dictionary<string, object> { ["eventTime"] = new Dictionary<string, object> { ["order"] = "desc" } } },
+            ["sort"] = new object[] { new Dictionary<string, object> { ["startTime"] = new Dictionary<string, object> { ["order"] = "desc" } } },
             ["query"] = new Dictionary<string, object>
             {
                 ["bool"] = new Dictionary<string, object> { ["filter"] = filters },

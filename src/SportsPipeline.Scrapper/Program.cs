@@ -50,6 +50,10 @@ builder.Services.AddSingleton<ProviderPoller>(sp =>
         sp.GetRequiredService<ILogger<ProviderPoller>>());
 });
 
+// for simplicity this is a single worker 
+// -> I would set a new hosted service per provider if we had multiple providers to poll in parallel 
+// Why? so we can "block" one without affecting the others and ensuring "noisy neighbour" issue won't occur 
+// Potentially even use a pod per provider if needed (overcomplexing IMO for this task but MUST be considered for production workload)  
 builder.Services.AddHostedService<ScrapperWorker>();
 
 var host = builder.Build();

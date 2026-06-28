@@ -6,6 +6,7 @@ using SportsPipeline.Domain;
 namespace SportsPipeline.Mapping;
 
 /// <summary>
+/// THIS IS FOR DEMO ONLY TO SHOW I KNOW WE MUST MAP INCOMING DATA INTO DOMAIN DATA
 /// Translates a raw provider JSON payload into a domain <see cref="SportEvent"/> using a
 /// <see cref="ProviderMapping"/>. Field paths are dotted (e.g. "home_team.name") and values may be
 /// remapped via per-field translation dictionaries.

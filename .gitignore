@@ -55,3 +55,13 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Java / Maven (flink/java)
+target/
+
+# IDEs
+.idea/
+.vs/
+
+# AWS CDK
+cdk.out/

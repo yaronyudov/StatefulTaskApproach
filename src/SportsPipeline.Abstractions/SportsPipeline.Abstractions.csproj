@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SportsPipeline.Domain\SportsPipeline.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

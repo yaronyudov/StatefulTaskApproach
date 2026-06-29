@@ -1,0 +1,20 @@
+{
+  "demo-provider": {
+    "providerId": "demo-provider",
+    "sportType": {
+      "sourcePath": "sport_type",
+      "valueMap": { "SOCCER": "Football", "BASKET": "Basketball" }
+    },
+    "competitionType": {
+      "sourcePath": "competition",
+      "valueMap": { "EPL": "English Premier League", "NBA": "National Basketball Association" }
+    },
+    "startTime": { "sourcePath": "kickoff" },
+    "eventTime": { "sourcePath": "ts" },
+    "homeTeamName": { "sourcePath": "home_team.name" },
+    "homeTeamId": { "sourcePath": "home_team.id" },
+    "awayTeamName": { "sourcePath": "away_team.name" },
+    "awayTeamId": { "sourcePath": "away_team.id" },
+    "metadataPath": "extra"
+  }
+}

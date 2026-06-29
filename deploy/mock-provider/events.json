@@ -1,0 +1,47 @@
+[
+  {
+    "sport_type": "SOCCER",
+    "competition": "EPL",
+    "kickoff": "2026-06-28T15:00:00Z",
+    "ts": "2026-06-28T15:00:00Z",
+    "home_team": { "id": "ARS", "name": "Arsenal" },
+    "away_team": { "id": "CHE", "name": "Chelsea" },
+    "extra": { "venue": "Emirates", "phase": "kickoff" }
+  },
+  {
+    "sport_type": "SOCCER",
+    "competition": "EPL",
+    "kickoff": "2026-06-28T15:00:00Z",
+    "ts": "2026-06-28T15:35:00Z",
+    "home_team": { "id": "CHE", "name": "Chelsea" },
+    "away_team": { "id": "ARS", "name": "Arsenal" },
+    "extra": { "phase": "goal", "score": "1-0" }
+  },
+  {
+    "sport_type": "SOCCER",
+    "competition": "EPL",
+    "kickoff": "2026-06-28T15:00:00Z",
+    "ts": "2026-06-28T16:20:00Z",
+    "home_team": { "id": "ARS", "name": "Arsenal" },
+    "away_team": { "id": "CHE", "name": "Chelsea" },
+    "extra": { "phase": "fulltime", "score": "1-1" }
+  },
+  {
+    "sport_type": "SOCCER",
+    "competition": "EPL",
+    "kickoff": "2026-06-28T19:00:00Z",
+    "ts": "2026-06-28T19:00:00Z",
+    "home_team": { "id": "ARS", "name": "Arsenal" },
+    "away_team": { "id": "CHE", "name": "Chelsea" },
+    "extra": { "phase": "kickoff", "note": "more than 2h after first event -> NEW first match" }
+  },
+  {
+    "sport_type": "BASKET",
+    "competition": "NBA",
+    "kickoff": "2026-06-28T18:00:00Z",
+    "ts": "2026-06-28T18:00:00Z",
+    "home_team": { "id": "LAL", "name": "Lakers" },
+    "away_team": { "id": "BOS", "name": "Celtics" },
+    "extra": { "phase": "tipoff" }
+  }
+]

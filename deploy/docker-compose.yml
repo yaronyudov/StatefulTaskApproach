@@ -1,0 +1,106 @@
+# Local end-to-end stack. From repo root:  
+# For Orleans: docker compose -f deploy/docker-compose.yml --profile orleans up --build
+# For Flink:   docker compose -f deploy/docker-compose.yml --profile flink up --build
+name: sports-pipeline
+
+services:
+  redpanda:
+    image: redpandadata/redpanda:v24.1.7
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --overprovisioned
+      - --node-id=0
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+    ports: ["9092:9092"]
+
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - bootstrap.memory_lock=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+    ports: ["9200:9200"]
+
+  mongo:
+    image: mongo:7
+    ports: ["27017:27017"]
+
+  mock-provider:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./mock-provider/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./mock-provider/events.json:/data/events.json:ro
+    ports: ["9099:9099"]
+
+  jobmanager:
+    build: { context: .., dockerfile: deploy/flink/Dockerfile }
+    command: jobmanager
+    ports: ["8081:8081"]
+    environment:
+      FLINK_PROPERTIES: "jobmanager.rpc.address: jobmanager"
+    volumes:
+      - ../flink:/opt/flink/sql:ro
+    depends_on: [redpanda, opensearch, mongo]
+    profiles: ["flink"]
+
+  taskmanager:
+    build: { context: .., dockerfile: deploy/flink/Dockerfile }
+    command: taskmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 4
+    depends_on: [jobmanager]
+    profiles: ["flink"]
+
+  scraper:
+    build:
+      context: ..
+      dockerfile: deploy/dotnet.Dockerfile
+      args: { PROJECT: SportsPipeline.Scraper, DLL: SportsPipeline.Scraper.dll }
+    environment:
+      - Scraper__Provider__BaseUrl=http://mock-provider:9099
+      - Scraper__Provider__EventsPath=/events
+      - Scraper__Provider__PollIntervalSeconds=3600
+      - Scraper__Kafka__BootstrapServers=redpanda:9092
+    depends_on: [redpanda, mock-provider]
+
+  classifier-orleans:
+    build:
+      context: ..
+      dockerfile: deploy/dotnet.Dockerfile
+      args: { PROJECT: SportsPipeline.Classifier.Orleans, DLL: SportsPipeline.Classifier.Orleans.dll }
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+      - MONGO_CONNECTION_STRING=mongodb://mongo:27017
+    depends_on: [redpanda, mongo]
+    profiles: ["orleans"]
+
+  sse:
+    build:
+      context: ..
+      dockerfile: deploy/dotnet.Dockerfile
+      args: { PROJECT: SportsPipeline.Sse, DLL: SportsPipeline.Sse.dll }
+    environment:
+      - Sse__BootstrapServers=redpanda:9092
+      - Sse__Topic=match-deltas
+    ports: ["8080:8080"]
+    depends_on: [redpanda]
+
+  queryapi:
+    build:
+      context: ..
+      dockerfile: deploy/dotnet.Dockerfile
+      args: { PROJECT: SportsPipeline.QueryApi, DLL: SportsPipeline.QueryApi.dll }
+    environment:
+      - OpenSearch__Url=http://opensearch:9200
+      - OpenSearch__Index=matches
+      - Mongo__ConnectionString=mongodb://mongo:27017
+      - Mongo__Database=sports
+      - Mongo__Collection=matches
+    ports: ["8082:8080"]
+    depends_on: [opensearch, mongo]

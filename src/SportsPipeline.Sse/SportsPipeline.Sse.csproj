@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>SportsPipeline.Sse</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SportsPipeline.Abstractions\SportsPipeline.Abstractions.csproj" />
+    <ProjectReference Include="..\SportsPipeline.Infrastructure.Kafka\SportsPipeline.Infrastructure.Kafka.csproj" />
+    <ProjectReference Include="..\SportsPipeline.Infrastructure.Redis\SportsPipeline.Infrastructure.Redis.csproj" />
+  </ItemGroup>
+
+</Project>

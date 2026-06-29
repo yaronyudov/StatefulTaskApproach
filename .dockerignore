@@ -1,0 +1,11 @@
+# Keep build contexts small and reproducible (the C# Dockerfiles use the repo root as context).
+**/bin/
+**/obj/
+**/out/
+.git/
+.github/
+.vs/
+.idea/
+flink/java/target/
+deploy/iac/cdk.out/
+*.user

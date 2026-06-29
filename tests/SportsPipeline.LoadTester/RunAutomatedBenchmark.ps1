@@ -19,13 +19,18 @@ function Run-Benchmark {
     
     # 1. Clean Slate
     Write-Host "[1/5] Tearing down and wiping volumes for a clean slate..." -ForegroundColor Yellow
-    docker compose -f deploy/docker-compose.yml --profile orleans --profile flink down -v | Out-Null
+    docker compose -f deploy/docker-compose.yml --profile orleans --profile flink down -v --remove-orphans | Out-Null
+    try {
+        docker rm -f sports-pipeline-redpanda-1 sports-pipeline-opensearch-1 sports-pipeline-mongo-1 sports-pipeline-redis-1 sports-pipeline-classifier-orleans-1 sports-pipeline-jobmanager-1 sports-pipeline-taskmanager-1 2>&1 | Out-Null
+    } catch {}
+    Start-Sleep -Seconds 5
     
     # 2. Start infra
     Write-Host "[2/5] Starting Infrastructure..." -ForegroundColor Yellow
     if ($Engine -eq "Orleans") {
         docker compose -f deploy/docker-compose.yml up -d redpanda opensearch mongo | Out-Null
-    } else {
+    }
+    else {
         docker compose -f deploy/docker-compose.yml up -d redpanda opensearch mongo jobmanager taskmanager | Out-Null
         Write-Host "      Waiting for Flink TaskManager to be ready..." -ForegroundColor Yellow
         Start-Sleep -Seconds 10
@@ -36,16 +41,17 @@ function Run-Benchmark {
     
     # 3. Inject Data
     Write-Host "[3/5] Injecting $TotalEvents events using LoadTester container..." -ForegroundColor Yellow
-    docker build -t loadtester -f tests/SportsPipeline.LoadTester/Dockerfile .
-    docker run --rm --network sports-pipeline_default loadtester --events $TotalEvents --matches $UniqueMatches --bootstrap-servers redpanda:9092 --topic validated-events
+    docker build -t loadtester -f tests/SportsPipeline.LoadTester/Dockerfile . | Out-Host
+    docker run --rm --network sports-pipeline_default loadtester --events $TotalEvents --matches $UniqueMatches --bootstrap-servers redpanda:9092 --topic validated-events | Out-Host
     
     # 4. Start Engine and Timer
     Write-Host "[4/5] Starting $Engine..." -ForegroundColor Yellow
     $StartTime = [DateTime]::UtcNow
     
     if ($Engine -eq "Orleans") {
-        docker compose -f deploy/docker-compose.yml --profile orleans up -d classifier-orleans | Out-Null
-    } else {
+        docker compose -f deploy/docker-compose.yml --profile orleans up -d --build classifier-orleans | Out-Null
+    }
+    else {
         Write-Host "      Submitting Flink Job..." -ForegroundColor Yellow
         docker compose -f deploy/docker-compose.yml exec jobmanager ./bin/flink run -d /opt/flink/sql/java/target/first-match-classifier-1.0.0.jar | Out-Null
     }
@@ -61,9 +67,9 @@ function Run-Benchmark {
     while ($true) {
         try {
             $output = docker compose -f deploy/docker-compose.yml exec redpanda rpk group describe $ConsumerGroup 2>&1
-            $lagLine = $output | Select-String "TOTAL LAG"
+            $lagLine = $output | Select-String "TOTAL-LAG"
             
-            if ($lagLine -match "TOTAL LAG\s+(\d+)") {
+            if ($lagLine -match "TOTAL-LAG\s+(\d+)") {
                 $Lag = [int]$matches[1]
                 Write-Host "      Current Lag: $Lag"
                 
@@ -73,13 +79,16 @@ function Run-Benchmark {
                         # Require 2 consecutive 0-lag polls to ensure it's fully settled
                         break
                     }
-                } else {
+                }
+                else {
                     $PollsWithZeroLag = 0
                 }
-            } else {
+            }
+            else {
                 Write-Host "      Waiting for consumer group to be registered..."
             }
-        } catch {
+        }
+        catch {
             Write-Host "      Waiting for consumer group..."
         }
         
@@ -101,7 +110,8 @@ if (-Not (Test-Path "flink/java/target/first-match-classifier-1.0.0.jar")) {
     Write-Host "Flink jar not found! Attempting to build with Maven..." -ForegroundColor Yellow
     try {
         mvn -f flink/java/pom.xml package -DskipTests | Out-Null
-    } catch {
+    }
+    catch {
         Write-Host "Maven build failed! Please ensure you have Maven installed and the Flink Java job compiles." -ForegroundColor Red
         exit 1
     }
@@ -119,6 +129,7 @@ Write-Host "Flink Throughput   : $($FlinkTPS.ToString('N0')) events/sec"
 
 if ($OrleansTPS -gt $FlinkTPS) {
     Write-Host "`nOrleans won by $(($OrleansTPS / $FlinkTPS).ToString('F2'))x !!" -ForegroundColor Green
-} else {
+}
+else {
     Write-Host "`nFlink won by $(($FlinkTPS / $OrleansTPS).ToString('F2'))x !!" -ForegroundColor Green
 }

@@ -38,7 +38,7 @@ public class MongoCdcBackgroundService : BackgroundService
         try
         {
             // Watch the entire database in this architectural demo
-            using var cursor = await database.WatchAsync(pipeline, options, cancellationToken: stoppingToken);
+            using var cursor = database.Watch(pipeline, options, cancellationToken: stoppingToken);
             
             while (await cursor.MoveNextAsync(stoppingToken))
             {

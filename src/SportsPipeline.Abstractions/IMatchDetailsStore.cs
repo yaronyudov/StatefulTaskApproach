@@ -7,4 +7,5 @@ namespace SportsPipeline.Abstractions;
 public interface IMatchDetailsStore
 {
     Task<string?> GetByIdAsync(string matchId, CancellationToken cancellationToken = default);
+    Task UpsertAsync(string matchId, string json, CancellationToken cancellationToken = default);
 }

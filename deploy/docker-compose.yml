@@ -1,5 +1,6 @@
-# Local end-to-end stack. From repo root:  docker compose -f deploy/docker-compose.yml up --build
-# Build contexts are the repo root (..) so the Dockerfiles can see src/ and flink/.
+# Local end-to-end stack. From repo root:  
+# For Orleans: docker compose -f deploy/docker-compose.yml --profile orleans up --build
+# For Flink:   docker compose -f deploy/docker-compose.yml --profile flink up --build
 name: sports-pipeline
 
 services:
@@ -44,6 +45,7 @@ services:
     volumes:
       - ../flink:/opt/flink/sql:ro
     depends_on: [redpanda, opensearch, mongo]
+    profiles: ["flink"]
 
   taskmanager:
     build: { context: .., dockerfile: deploy/flink/Dockerfile }
@@ -53,18 +55,30 @@ services:
         jobmanager.rpc.address: jobmanager
         taskmanager.numberOfTaskSlots: 4
     depends_on: [jobmanager]
+    profiles: ["flink"]
 
-  scrapper:
+  scraper:
     build:
       context: ..
       dockerfile: deploy/dotnet.Dockerfile
-      args: { PROJECT: SportsPipeline.Scrapper, DLL: SportsPipeline.Scrapper.dll }
+      args: { PROJECT: SportsPipeline.Scraper, DLL: SportsPipeline.Scraper.dll }
     environment:
-      - Scrapper__Provider__BaseUrl=http://mock-provider:9099
-      - Scrapper__Provider__EventsPath=/events
-      - Scrapper__Provider__PollIntervalSeconds=3600
-      - Scrapper__Kafka__BootstrapServers=redpanda:9092
+      - Scraper__Provider__BaseUrl=http://mock-provider:9099
+      - Scraper__Provider__EventsPath=/events
+      - Scraper__Provider__PollIntervalSeconds=3600
+      - Scraper__Kafka__BootstrapServers=redpanda:9092
     depends_on: [redpanda, mock-provider]
+
+  classifier-orleans:
+    build:
+      context: ..
+      dockerfile: deploy/dotnet.Dockerfile
+      args: { PROJECT: SportsPipeline.Classifier.Orleans, DLL: SportsPipeline.Classifier.Orleans.dll }
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+      - MONGO_CONNECTION_STRING=mongodb://mongo:27017
+    depends_on: [redpanda, mongo]
+    profiles: ["orleans"]
 
   sse:
     build:

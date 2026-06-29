@@ -9,4 +9,5 @@ namespace SportsPipeline.Abstractions;
 public interface IMatchSearchStore
 {
     Task<IReadOnlyList<JsonElement>> SearchAsync(QueryParams query, CancellationToken cancellationToken = default);
+    Task IndexAsync(string matchId, string json, CancellationToken cancellationToken = default);
 }

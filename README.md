@@ -6,11 +6,13 @@ historical queries — with ingestion and query load fully decoupled (CQRS).
 
 ## Architecture
 
+See **[docs/part-a-system-design.md](docs/part-a-system-design.md)** for the high-level visual overview mapping out the system design and home task requirements.
+
 See **[docs/architecture.md](docs/architecture.md)** for the full design (diagrams, state machine,
 CQRS read path, failure modes, AWS mapping).
 
 ```
-Providers → Scrapper(s) → Kafka(ingested-events) → Flink(first vs not-first) → {
+Providers → Scraper(s) → Kafka(ingested-events) → Flink(first vs not-first) → {
     first-match-events, not-first-match-events,
     match-deltas → SSE → subscribers,
     OpenSearch(first = discovery), MongoDB(deltas = details)
@@ -25,18 +27,18 @@ Query API: search OpenSearch (find matchId) → fetch MongoDB (details)
 | `src/SportsPipeline.Domain` | Domain DTOs + order-agnostic `MatchIdentity` (no deps) |
 | `src/SportsPipeline.Abstractions` | **Ports**: `IMappingStore`, `IEventPublisher`, `IMatchSearchStore`, `IMatchDetailsStore`, `IDeltaHandler` + their DTOs |
 | `src/SportsPipeline.Contracts` | Kafka topic names + JSON contract |
-| `src/SportsPipeline.Mapping` | Provider→domain mapping logic (`ProviderEventMapper`) |
+| `src/SportsPipeline.Validator` | Consumes raw events, maps them (`ProviderEventMapper`), and validates |
 | `src/SportsPipeline.Infrastructure.Kafka` | Adapter: `KafkaEventPublisher`, `KafkaDeltaConsumer` |
 | `src/SportsPipeline.Infrastructure.DynamoDb` | Adapter: `DynamoDbMappingStore` |
 | `src/SportsPipeline.Infrastructure.Files` | Adapter: `JsonFileMappingStore` (local dev) |
 | `src/SportsPipeline.Infrastructure.OpenSearch` | Adapter: `OpenSearchMatchSearch` (discovery) |
 | `src/SportsPipeline.Infrastructure.Mongo` | Adapter: `MongoMatchDetails` (details) |
-| `src/SportsPipeline.Scrapper` | App: config-driven poller (rate-limit, backoff, validate, publish) |
+| `src/SportsPipeline.Scraper` | App: config-driven poller (rate-limit, backoff, validate, publish) |
 | `src/SportsPipeline.Sse` | App: SSE service, `match-deltas` → `text/event-stream` |
 | `src/SportsPipeline.QueryApi` | App: discovery (OpenSearch) + details (MongoDB) |
 | `flink/match_pipeline.sql` | Shipped Flink SQL classification (relaxed semantics) |
-| `flink/java/...` | Native Java `KeyedProcessFunction` (exact ±2h semantics) |
-| `tests/SportsPipeline.Tests` | Unit tests for the pure logic |
+| `flink/java/...` | [FUTURE] Native Java `KeyedProcessFunction` (exact ±2h semantics) |
+| `tests/SportsPipeline.Tests` | Unit tests and `MockFlinkSinkHandler` for local E2E simulation |
 | `deploy/` | docker-compose stack, Dockerfiles, mock provider, CDK skeleton |
 
 ### Layering (Ports & Adapters)
@@ -45,7 +47,7 @@ Dependencies point inward: `Domain` → `Abstractions` (ports) → apps. The **a
 port interfaces**; each concrete data/IO adapter lives in its own `Infrastructure.<tech>` project and
 is selected once in the app's `Program.cs` (composition root). So a service can swap OpenSearch, Mongo,
 Kafka, or DynamoDB without touching app logic, and each app pulls only the adapters it actually uses
-(the scrapper never references the Mongo/OpenSearch drivers).
+(the scraper never references the Mongo/OpenSearch drivers).
 
 ## Build & test
 

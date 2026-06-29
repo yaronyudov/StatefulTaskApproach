@@ -6,7 +6,7 @@ docker compose -f deploy/docker-compose.yml up --build
 ```
 
 Brings up Redpanda (Kafka), Flink (JobManager + TaskManager with connector JARs), OpenSearch,
-MongoDB, an nginx mock provider, and the three C# services (scrapper, sse, query-api).
+MongoDB, an nginx mock provider, and the three C# services (scraper, sse, query-api).
 
 ## Submit the Flink job
 
@@ -19,7 +19,7 @@ docker compose -f deploy/docker-compose.yml exec jobmanager \
 
 ## Watch it work
 
-The scrapper polls the mock provider on startup and publishes 5 crafted events to `ingested-events`:
+The scraper polls the mock provider on startup and publishes 5 crafted events to `ingested-events`:
 an Arsenal–Chelsea match with 3 events inside ~80 min (1 first + 2 deltas), a 4th event >2h later
 (a NEW first match), and a Lakers–Celtics tip-off.
 
@@ -41,7 +41,7 @@ curl -N 'http://localhost:8080/subscribe/<matchId>'
 
 ## Notes
 
-- The scrapper maps provider fields -> domain DTO using `src/SportsPipeline.Scrapper/providers.sample.json`.
+- The scraper maps provider fields -> domain DTO using `src/SportsPipeline.Scraper/providers.sample.json`.
 - **OpenSearch** holds **first-match rows only**, written immediately (discovery / "find the match").
 - **MongoDB Atlas** holds **one final-state doc per match window** (`_id = matchId`), written once at
   window close — not per event (avoids the hot path). Local compose uses a `mongo:7` container as an

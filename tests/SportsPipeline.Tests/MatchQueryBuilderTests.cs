@@ -47,12 +47,12 @@ public class MatchQueryBuilderTests
     }
 
     [Fact]
-    public void Time_only_produces_range_on_event_time()
+    public void Time_only_produces_range_on_start_time()
     {
         var json = BuildJson(new QueryParams(
             From: new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero)));
         var clause = Filters(json)[0];
-        Assert.True(clause.GetProperty("range").TryGetProperty("eventTime", out var range));
+        Assert.True(clause.GetProperty("range").TryGetProperty("startTime", out var range));
         Assert.True(range.TryGetProperty("gte", out _));
         Assert.False(range.TryGetProperty("lte", out _)); // no upper bound supplied
     }

@@ -7,16 +7,18 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Moq" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SportsPipeline.Domain\SportsPipeline.Domain.csproj" />
+    <ProjectReference Include="..\..\src\SportsPipeline.Scraper\SportsPipeline.Scraper.csproj" />
     <ProjectReference Include="..\..\src\SportsPipeline.Abstractions\SportsPipeline.Abstractions.csproj" />
-    <ProjectReference Include="..\..\src\SportsPipeline.Mapping\SportsPipeline.Mapping.csproj" />
-    <ProjectReference Include="..\..\src\SportsPipeline.Scrapper\SportsPipeline.Scrapper.csproj" />
     <ProjectReference Include="..\..\src\SportsPipeline.Infrastructure.OpenSearch\SportsPipeline.Infrastructure.OpenSearch.csproj" />
+    <ProjectReference Include="..\..\src\SportsPipeline.Validator\SportsPipeline.Validator.csproj" />
+    <ProjectReference Include="..\..\src\SportsPipeline.Sse\SportsPipeline.Sse.csproj" />
   </ItemGroup>
 
 </Project>

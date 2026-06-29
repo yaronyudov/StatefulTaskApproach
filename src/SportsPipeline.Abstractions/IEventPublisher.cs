@@ -6,4 +6,5 @@ namespace SportsPipeline.Abstractions;
 public interface IEventPublisher : IAsyncDisposable
 {
     Task PublishAsync(SportEvent ev, CancellationToken cancellationToken);
+    Task PublishRawAsync(string topic, string rawPayload, IReadOnlyDictionary<string, string>? headers, CancellationToken cancellationToken);
 }

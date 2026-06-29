@@ -42,9 +42,9 @@ public sealed class SportsPipelineStack : Stack
         // point lookups by id. Connection: Atlas SRV uri, tls=true, retryWrites=false, secret in Secrets Manager.
         // e.g. new AtlasBasic(this, "Details", new AtlasBasicProps { ... ClusterName="sports", Region="US_EAST_1" });
 
-        // ECS cluster hosting the C# services (one scrapper service per provider, sse, query-api).
+        // ECS cluster hosting the C# services (one scraper service per provider, sse, query-api).
         var cluster = new Cluster(this, "Cluster", new ClusterProps { Vpc = vpc });
-        AddFargateService(cluster, "ScrapperProviderA");  // one per provider (blast-radius isolation)
+        AddFargateService(cluster, "ScraperProviderA");  // one per provider (blast-radius isolation)
         AddFargateService(cluster, "Sse");
         AddFargateService(cluster, "QueryApi");
 

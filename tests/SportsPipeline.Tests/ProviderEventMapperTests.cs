@@ -1,6 +1,6 @@
 using System.Text.Json;
 using SportsPipeline.Abstractions;
-using SportsPipeline.Mapping;
+using SportsPipeline.Validator.Mapping;
 using Xunit;
 
 namespace SportsPipeline.Tests;

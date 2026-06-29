@@ -4,24 +4,21 @@ using OpenSearch.Client;
 using SportsPipeline.Abstractions;
 using SportsPipeline.Infrastructure.Mongo;
 using SportsPipeline.Infrastructure.OpenSearch;
+using SportsPipeline.QueryApi.Models;
+using SportsPipeline.QueryApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
- // ***** For simplicity, must be pulled from env var 
-var osUrl = builder.Configuration["OpenSearch:Url"] ?? "http://localhost:9200";
-var osIndex = builder.Configuration["OpenSearch:Index"] ?? "matches";
-var mongoConn = builder.Configuration["Mongo:ConnectionString"] ?? "mongodb://localhost:27017";
-var mongoDb = builder.Configuration["Mongo:Database"] ?? "sports";
-var mongoCollection = builder.Configuration["Mongo:Collection"] ?? "matches";
+builder.Services.AddOpenSearchMatchSearch(builder.Configuration);
+builder.Services.AddMongoMatchDetailsStore(builder.Configuration);
 
-// Composition root: the only place that knows the concrete adapters. The endpoints below depend
-// solely on the IMatchSearchStore / IMatchDetailsStore ports.
-var osSettings = new ConnectionSettings(new Uri(osUrl)).DefaultIndex(osIndex);
-var osClient = new OpenSearchClient(osSettings);
-builder.Services.AddSingleton<IMatchSearchStore>(new OpenSearchMatchSearch(osClient, osIndex));
-
-var mongo = new MongoClient(mongoConn).GetDatabase(mongoDb).GetCollection<BsonDocument>(mongoCollection);
-builder.Services.AddSingleton<IMatchDetailsStore>(new MongoMatchDetails(mongo));
+var redisConnStr = builder.Configuration.GetValue<string>("Redis:ConnectionString") ?? "localhost:6379";
+builder.Services.AddStackExchangeRedisCache(options => 
+{
+    options.Configuration = redisConnStr;
+    options.InstanceName = "SportsPipeline:";
+});
+builder.Services.AddSingleton<CacheStampedeProtector>();
 
 var app = builder.Build();
 
@@ -42,15 +39,45 @@ app.MapGet("/matches", async (
     
     var p = new QueryParams(from, to, sport, competition, team, size ?? 50);
     var hits = await search.SearchAsync(p, ct);
-    return Results.Json(hits);
+    var summaries = hits.Select(MapToSummary);
+    return Results.Json(summaries);
 });
 
 // -> not for this scope but AI already implemented
 // Details: point lookup by matchId (document id). 
-app.MapGet("/matches/{matchId}", async (string matchId, IMatchDetailsStore details, CancellationToken ct) =>
+app.MapGet("/matches/{matchId}", async (string matchId, IMatchDetailsStore details, CacheStampedeProtector cache, CancellationToken ct) =>
 {
-    var json = await details.GetByIdAsync(matchId, ct);
+    // Caching Strategy:
+    // We cache the result in Redis. For non-live matches, this effectively lives forever (or a very long TTL).
+    // For live matches, Orleans will actively INVALIDATE this cache key when a crucial stat (goal/card) occurs.
+    var cacheKey = $"match-details:{matchId}";
+    
+    // We use a 24-hour TTL by default, assuming matches end within that time or get updated.
+    var json = await cache.GetOrAddAsync(cacheKey, 
+        () => details.GetByIdAsync(matchId, ct), 
+        TimeSpan.FromHours(24), 
+        ct);
+
     return json is null ? Results.NotFound() : Results.Content(json, "application/json");
 });
 
 app.Run();
+
+MatchSummary MapToSummary(System.Text.Json.JsonElement h)
+{
+    var id = h.TryGetProperty("matchId", out var idProp) ? idProp.GetString() : h.GetProperty("MatchKey").GetString();
+    var sport = h.TryGetProperty("sport", out var sProp) ? sProp.GetString() : h.GetProperty("SportType").GetString();
+    var comp = h.TryGetProperty("competition", out var cProp) ? cProp.GetString() : h.GetProperty("CompetitionType").GetString();
+    
+    var home = h.TryGetProperty("homeTeam", out var hProp) && hProp.ValueKind == System.Text.Json.JsonValueKind.String 
+        ? hProp.GetString() 
+        : (h.TryGetProperty("HomeTeam", out var htObj) ? htObj.GetProperty("Name").GetString() : h.GetProperty("homeTeam").GetProperty("name").GetString());
+        
+    var away = h.TryGetProperty("awayTeam", out var aProp) && aProp.ValueKind == System.Text.Json.JsonValueKind.String 
+        ? aProp.GetString() 
+        : (h.TryGetProperty("AwayTeam", out var atObj) ? atObj.GetProperty("Name").GetString() : h.GetProperty("awayTeam").GetProperty("name").GetString());
+        
+    var start = h.TryGetProperty("startTime", out var stProp) ? stProp.GetDateTimeOffset() : h.GetProperty("StartTime").GetDateTimeOffset();
+    
+    return new MatchSummary(id ?? "", sport ?? "", comp ?? "", home ?? "", away ?? "", start);
+}

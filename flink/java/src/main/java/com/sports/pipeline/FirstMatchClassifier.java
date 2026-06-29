@@ -1,11 +1,14 @@
 package com.sports.pipeline;
 
+import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.OutputTag;
+
+import java.time.Duration;
 
 /**
  * EXACT first-vs-not-first classification with a window-close final write — the precise spec
@@ -35,16 +38,35 @@ public class FirstMatchClassifier extends KeyedProcessFunction<String, SportEven
 
     private transient ValueState<Long> anchorState;
     private transient ValueState<FinalMatchState> accState;
+    
+    private final int ttlHours;
+
+    public FirstMatchClassifier(int ttlHours) {
+        this.ttlHours = ttlHours;
+    }
 
     @Override
     public void open(Configuration parameters) {
-        anchorState = getRuntimeContext().getState(new ValueStateDescriptor<>("anchor", Long.class));
-        accState = getRuntimeContext().getState(new ValueStateDescriptor<>("acc", FinalMatchState.class));
+        // Hard safety net: Even though we clear state in onTimer(), this TTL ensures 
+        // that a hung window (due to watermark issues) will never blow up RocksDB memory.
+        StateTtlConfig ttlConfig = StateTtlConfig
+                .newBuilder(Duration.ofHours(ttlHours))
+                .setUpdateType(StateTtlConfig.UpdateType.OnCreateAndWrite)
+                .setStateVisibility(StateTtlConfig.StateVisibility.NeverReturnExpired)
+                .build();
+
+        ValueStateDescriptor<Long> anchorDesc = new ValueStateDescriptor<>("anchor", Long.class);
+        anchorDesc.enableTimeToLive(ttlConfig);
+        anchorState = getRuntimeContext().getState(anchorDesc);
+
+        ValueStateDescriptor<FinalMatchState> accDesc = new ValueStateDescriptor<>("acc", FinalMatchState.class);
+        accDesc.enableTimeToLive(ttlConfig);
+        accState = getRuntimeContext().getState(accDesc);
     }
 
     @Override
     public void processElement(SportEvent event, Context ctx, Collector<ClassifiedEvent> out) throws Exception {
-        long ts = event.eventTimeMillis();
+        long ts = event.startTimeMillis();
         Long anchor = anchorState.value();
 
         boolean isFirst = anchor == null || ts > anchor + WINDOW_MILLIS || ts < anchor - WINDOW_MILLIS;
@@ -52,10 +74,16 @@ public class FirstMatchClassifier extends KeyedProcessFunction<String, SportEven
             anchor = ts;
             anchorState.update(anchor);
             String matchId = event.matchKey() + "_" + anchor;
-            accState.update(FinalMatchState.create(event, matchId));
+            
+            FinalMatchState initialState = FinalMatchState.create(event, matchId);
+            accState.update(initialState);
+            
             // Fire one final write when this window closes (event-time).
             ctx.timerService().registerEventTimeTimer(anchor + WINDOW_MILLIS);
             out.collect(ClassifiedEvent.of(event, matchId, "A")); // new game stored (first topic + ES)
+            
+            // Instantly write the initial state to MongoDB so the document exists for immediate querying!
+            ctx.output(FINAL_STATE, initialState);
         } else {
             String matchId = event.matchKey() + "_" + anchor;
             FinalMatchState acc = accState.value();

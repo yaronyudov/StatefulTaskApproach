@@ -3,11 +3,6 @@ using Xunit;
 
 namespace SportsPipeline.Tests;
 
-/// <summary>
-/// The ±2h window scenario. Anchor is the first processed event (18:00). Events within
-/// [16:00, 20:00] inclusive are duplicates (live updates to avoid storing as new games); events
-/// outside re-anchor as a new game.
-/// </summary>
 public class MatchWindowClassifierTests
 {
     private const string Key = "arsenal-chelsea-epl-football";
@@ -15,47 +10,58 @@ public class MatchWindowClassifierTests
         new(2026, 6, 28, hour, minute, 0, TimeSpan.Zero);
 
     [Fact]
-    public void Scenario_table_classifies_window_correctly()
+    public void Scenario1_SameStartTime_DifferentEventTimes_IsUpdate()
     {
         var classifier = new MatchWindowClassifier();
 
-        // Start 18:00 (None) -> new game stored (sets the anchor)
-        Assert.Equal(MatchClassification.NewGame, classifier.Classify(Key, At(18, 0)));
+        // Provider A: Published at 12 PM, Kickoff at 8 PM
+        Assert.Equal(MatchClassification.NewGame, classifier.Classify(Key, startTime: At(20, 0), eventTime: At(12, 0)));
 
-        // Exact lower bound 16:00 (-2h) -> duplicate
-        Assert.Equal(MatchClassification.Duplicate, classifier.Classify(Key, At(16, 0)));
+        // Provider B: Published at 3 PM, Kickoff at 8 PM
+        // EventTime gap is 3 hours, but StartTime is the same, so it should be an Update to the same window!
+        Assert.Equal(MatchClassification.Update, classifier.Classify(Key, startTime: At(20, 0), eventTime: At(15, 0)));
+    }
 
-        // Exact upper bound 20:00 (+2h) -> duplicate
-        Assert.Equal(MatchClassification.Duplicate, classifier.Classify(Key, At(20, 0)));
+    [Fact]
+    public void Scenario2_DifferentStartTimes_ConcurrentWindows()
+    {
+        var classifier = new MatchWindowClassifier();
 
-        // 17:30 (-30m) -> duplicate
-        Assert.Equal(MatchClassification.Duplicate, classifier.Classify(Key, At(17, 30)));
+        // Provider A: Published at 12 PM, Kickoff at 8 PM
+        Assert.Equal(MatchClassification.NewGame, classifier.Classify(Key, startTime: At(20, 0), eventTime: At(12, 0)));
 
-        // 18:30 (+30m) -> duplicate
-        Assert.Equal(MatchClassification.Duplicate, classifier.Classify(Key, At(18, 30)));
+        // Provider B: Published at 1:50 PM, Kickoff at 11 PM
+        // EventTime gap is < 2h, but StartTime gap is 3h. Should be a NewGame (second active window for same key).
+        Assert.Equal(MatchClassification.NewGame, classifier.Classify(Key, startTime: At(23, 0), eventTime: At(13, 50)));
 
-        // New game 20:01 (+2h1m) -> outside window -> new game stored
-        Assert.Equal(MatchClassification.NewGame, classifier.Classify(Key, At(20, 1)));
+        // Now an update comes for the 8 PM game at 2:00 PM
+        Assert.Equal(MatchClassification.Update, classifier.Classify(Key, startTime: At(20, 0), eventTime: At(14, 0)));
+
+        // Now an update comes for the 11 PM game at 4:00 PM
+        Assert.Equal(MatchClassification.Update, classifier.Classify(Key, startTime: At(23, 0), eventTime: At(16, 0)));
+    }
+
+    [Fact]
+    public void Scenario3_LateEvent_IsDroppedAsUpdate()
+    {
+        var classifier = new MatchWindowClassifier();
+
+        // First event at 12 PM (Kickoff 8 PM)
+        Assert.Equal(MatchClassification.NewGame, classifier.Classify(Key, startTime: At(20, 0), eventTime: At(12, 0)));
+
+        // Second event moves watermark to 3 PM
+        Assert.Equal(MatchClassification.Update, classifier.Classify(Key, startTime: At(20, 0), eventTime: At(15, 0)));
+
+        // Third event arrives late (EventTime is 1 PM, which is older than MaxEventTime 3 PM)
+        // It should be classified as an Update (so it is ignored by MVP sink)
+        Assert.Equal(MatchClassification.Update, classifier.Classify(Key, startTime: At(20, 0), eventTime: At(13, 0)));
     }
 
     [Fact]
     public void Different_match_keys_have_independent_windows()
     {
         var classifier = new MatchWindowClassifier();
-        Assert.Equal(MatchClassification.NewGame, classifier.Classify("match-a", At(18, 0)));
-        // Same timestamp, different match -> its own first/new game, not a duplicate of match-a.
-        Assert.Equal(MatchClassification.NewGame, classifier.Classify("match-b", At(18, 0)));
-    }
-
-    [Fact]
-    public void New_game_reanchors_so_next_window_is_measured_from_it()
-    {
-        var classifier = new MatchWindowClassifier();
-        classifier.Classify(Key, At(18, 0));            // anchor 18:00
-        classifier.Classify(Key, At(20, 1));            // new game, re-anchor 20:01
-        // 21:00 is within 2h of the NEW anchor (20:01) -> duplicate
-        Assert.Equal(MatchClassification.Duplicate, classifier.Classify(Key, At(21, 0)));
-        // 22:02 is > 2h from 20:01 -> new game again
-        Assert.Equal(MatchClassification.NewGame, classifier.Classify(Key, At(22, 2)));
+        Assert.Equal(MatchClassification.NewGame, classifier.Classify("match-a", At(20, 0), At(12, 0)));
+        Assert.Equal(MatchClassification.NewGame, classifier.Classify("match-b", At(20, 0), At(12, 0)));
     }
 }

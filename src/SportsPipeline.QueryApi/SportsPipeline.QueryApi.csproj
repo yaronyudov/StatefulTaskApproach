@@ -10,4 +10,9 @@
     <ProjectReference Include="..\SportsPipeline.Infrastructure.Mongo\SportsPipeline.Infrastructure.Mongo.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
+    <PackageReference Include="StackExchange.Redis" />
+  </ItemGroup>
+
 </Project>

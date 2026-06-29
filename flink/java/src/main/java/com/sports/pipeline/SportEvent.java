@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.Map;
 
 /**
- * Domain event as produced by the C# scrappers onto the {@code ingested-events} topic. Field names
+ * Domain event as produced by the C# scrapers onto the {@code ingested-events} topic. Field names
  * match the JSON (camelCase). Only the bits the classifier needs have behaviour; the rest are
  * carried through to the sinks.
  */
@@ -24,6 +24,10 @@ public class SportEvent {
 
     public long eventTimeMillis() {
         return eventTime.toEpochMilli();
+    }
+
+    public long startTimeMillis() {
+        return startTime.toEpochMilli();
     }
 
     public static class Team {

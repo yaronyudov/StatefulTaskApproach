@@ -41,16 +41,24 @@ public class FirstMatchClassifierJob {
 
     public static void main(String[] args) throws Exception {
         final String brokers = System.getenv().getOrDefault("KAFKA_BROKERS", "redpanda:9092");
+        // Defaults to the topic the validated events land on (same input Orleans consumes), so the
+        // benchmark feeds both engines identical data. Override with INPUT_TOPIC if needed.
+        final String inputTopic = System.getenv().getOrDefault("INPUT_TOPIC", "validated-events");
         final int ttlHours = Integer.parseInt(System.getenv().getOrDefault("STATE_TTL_HOURS", "24"));
         final ObjectMapper mapper = JsonMapper.builder().findAndAddModules().build();
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        // Checkpointing is required for two reasons here: KafkaSource only commits group offsets on a
+        // completed checkpoint (so consumer-group lag — how the benchmark detects "done" — never moves
+        // without it), and the MongoDB/OpenSearch sinks only flush their buffers on checkpoint.
+        env.enableCheckpointing(10_000);
 
         KafkaSource<String> source = KafkaSource.<String>builder()
                 .setBootstrapServers(brokers)
-                .setTopics("ingested-events")
+                .setTopics(inputTopic)
                 .setGroupId("flink-classifier-java")
                 .setStartingOffsets(OffsetsInitializer.earliest())
+                .setProperty("commit.offsets.on.checkpoint", "true")
                 .setValueOnlyDeserializer(new SimpleStringSchema())
                 .build();
 

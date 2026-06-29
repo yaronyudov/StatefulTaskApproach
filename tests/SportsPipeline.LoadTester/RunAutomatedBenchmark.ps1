@@ -47,7 +47,7 @@ function Run-Benchmark {
         docker compose -f deploy/docker-compose.yml --profile orleans up -d classifier-orleans | Out-Null
     } else {
         Write-Host "      Submitting Flink Job..." -ForegroundColor Yellow
-        docker compose -f deploy/docker-compose.yml exec jobmanager ./bin/flink run -d /opt/flink/sql/java/target/first-match-classifier-1.0.0.jar | Out-Null
+        docker compose -f deploy/docker-compose.yml exec -T jobmanager ./bin/flink run -d /opt/flink/sql/java/target/first-match-classifier-1.0.0.jar | Out-Null
     }
     
     # Wait slightly to ensure consumer group is registered
@@ -60,10 +60,11 @@ function Run-Benchmark {
     
     while ($true) {
         try {
-            $output = docker compose -f deploy/docker-compose.yml exec redpanda rpk group describe $ConsumerGroup 2>&1
-            $lagLine = $output | Select-String "TOTAL LAG"
-            
-            if ($lagLine -match "TOTAL LAG\s+(\d+)") {
+            $output = docker compose -f deploy/docker-compose.yml exec -T redpanda rpk group describe $ConsumerGroup 2>&1
+            # rpk prints the summary as "TOTAL-LAG" (v24+) or "TOTAL LAG" depending on version.
+            $lagLine = $output | Select-String "TOTAL[- ]LAG"
+
+            if ($lagLine -match "TOTAL[- ]LAG\s+(\d+)") {
                 $Lag = [int]$matches[1]
                 Write-Host "      Current Lag: $Lag"
                 
@@ -96,15 +97,13 @@ function Run-Benchmark {
     return $EventsPerSecond
 }
 
-Write-Host "Checking for Flink jar..."
-if (-Not (Test-Path "flink/java/target/first-match-classifier-1.0.0.jar")) {
-    Write-Host "Flink jar not found! Attempting to build with Maven..." -ForegroundColor Yellow
-    try {
-        mvn -f flink/java/pom.xml package -DskipTests | Out-Null
-    } catch {
-        Write-Host "Maven build failed! Please ensure you have Maven installed and the Flink Java job compiles." -ForegroundColor Red
-        exit 1
-    }
+# Always (re)build the shaded Flink application jar so we never submit a stale/thin jar.
+# Check $LASTEXITCODE explicitly: on Windows PowerShell 5.1 a failing native command does not throw.
+Write-Host "Building Flink application jar with Maven..." -ForegroundColor Yellow
+mvn -f flink/java/pom.xml package -DskipTests | Out-Null
+if ($LASTEXITCODE -ne 0 -or -Not (Test-Path "flink/java/target/first-match-classifier-1.0.0.jar")) {
+    Write-Host "Maven build failed! Ensure Maven is installed and the Flink Java job compiles (mvn -f flink/java/pom.xml package)." -ForegroundColor Red
+    exit 1
 }
 
 $OrleansTPS = Run-Benchmark -Engine "Orleans" -ConsumerGroup "orleans-classifier-group"

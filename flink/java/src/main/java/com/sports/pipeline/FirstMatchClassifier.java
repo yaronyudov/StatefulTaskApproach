@@ -3,12 +3,11 @@ package com.sports.pipeline;
 import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.OutputTag;
-
-import java.time.Duration;
 
 /**
  * EXACT first-vs-not-first classification with a window-close final write — the precise spec
@@ -50,7 +49,7 @@ public class FirstMatchClassifier extends KeyedProcessFunction<String, SportEven
         // Hard safety net: Even though we clear state in onTimer(), this TTL ensures 
         // that a hung window (due to watermark issues) will never blow up RocksDB memory.
         StateTtlConfig ttlConfig = StateTtlConfig
-                .newBuilder(Duration.ofHours(ttlHours))
+                .newBuilder(Time.hours(ttlHours))
                 .setUpdateType(StateTtlConfig.UpdateType.OnCreateAndWrite)
                 .setStateVisibility(StateTtlConfig.StateVisibility.NeverReturnExpired)
                 .build();

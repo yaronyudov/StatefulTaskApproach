@@ -17,7 +17,7 @@ delta output and an anchor-based `matchId`) is **not expressible in pure SQL**. 
 ```bash
 mvn -f flink/java/pom.xml package
 docker compose -f deploy/docker-compose.yml exec jobmanager \
-  ./bin/flink run /opt/flink/usrlib/first-match-classifier-1.0.0.jar
+  ./bin/flink run /opt/flink/sql/java/target/first-match-classifier-1.0.0.jar
 ```
 
 ## AWS

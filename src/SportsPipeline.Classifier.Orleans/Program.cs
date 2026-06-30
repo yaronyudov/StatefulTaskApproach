@@ -10,19 +10,24 @@ using StackExchange.Redis;
 
 var builder = Host.CreateDefaultBuilder(args);
 
+var redisConnStr = Environment.GetEnvironmentVariable("REDIS_CONNECTION_STRING") ?? "localhost:6379";
+
 builder.UseOrleans(silo =>
 {
     var mongoConnectionString = Environment.GetEnvironmentVariable("MONGO_CONNECTION_STRING") ?? "mongodb://localhost:27017";
-    
+
+    // Cluster membership stays on MongoDB (low volume, off the hot path)...
     silo.UseMongoDBClient(mongoConnectionString)
         .UseMongoDBClustering(options =>
         {
             options.DatabaseName = "SportsPipeline";
             options.CreateShardKeyForCosmos = false;
         })
-        .AddMongoDBGrainStorageAsDefault(options =>
+        // ...but grain state now lives in Redis: per-event persistence is cheap and survives a pod
+        // crash, so MongoDB is no longer written on the hot path (it becomes the periodic archive).
+        .AddRedisGrainStorageAsDefault(options =>
         {
-            options.DatabaseName = "SportsPipeline";
+            options.ConfigurationOptions = ConfigurationOptions.Parse(redisConnStr);
         });
 });
 
@@ -43,18 +48,18 @@ builder.ConfigureServices((hostContext, services) =>
             options.Partitions = partitions;
     });
 
+    // Discovery (OpenSearch) is written directly by the grain on first sight of a match.
     services.AddOpenSearchMatchSearch(hostContext.Configuration);
+    // MongoDB is the periodic / final archive (written off the hot path by the grain's flush timer).
+    services.AddMongoMatchDetailsStore(hostContext.Configuration);
 
     services.AddSingleton<IValidatedEventProcessor, OrleansEventProcessor>();
     services.AddHostedService<KafkaValidatedEventConsumer>();
 
-    var redisConnStr = Environment.GetEnvironmentVariable("REDIS_CONNECTION_STRING") ?? "localhost:6379";
+    // Redis: the authoritative live store + SSE delta fan-out.
     services.AddSingleton<IConnectionMultiplexer>(sp => ConnectionMultiplexer.Connect(redisConnStr));
     services.AddSingleton<IDeltaPublisher, RedisDeltaPublisher>();
-    services.AddSingleton<ICacheInvalidator, RedisCacheInvalidator>();
-    
-    // Add CDC worker to tail MongoDB and push to OpenSearch
-    services.AddMongoCdcWorker();
+    services.AddSingleton<ILiveMatchStateStore, RedisLiveMatchStateStore>();
 });
 
 var host = builder.Build();

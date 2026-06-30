@@ -8,6 +8,7 @@
     <ProjectReference Include="..\SportsPipeline.Abstractions\SportsPipeline.Abstractions.csproj" />
     <ProjectReference Include="..\SportsPipeline.Infrastructure.OpenSearch\SportsPipeline.Infrastructure.OpenSearch.csproj" />
     <ProjectReference Include="..\SportsPipeline.Infrastructure.Mongo\SportsPipeline.Infrastructure.Mongo.csproj" />
+    <ProjectReference Include="..\SportsPipeline.Infrastructure.Redis\SportsPipeline.Infrastructure.Redis.csproj" />
   </ItemGroup>
 
   <ItemGroup>

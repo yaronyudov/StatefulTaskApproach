@@ -31,6 +31,9 @@ services:
 
   redis:
     image: redis:7-alpine
+    # Redis is the authoritative LIVE store, so run it durable: append-only file, fsync per write
+    # (zero-loss). In production add a replica/Sentinel for HA.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "always"]
     ports: ["6379:6379"]
 
   mock-provider:
@@ -82,6 +85,10 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
       - MONGO_CONNECTION_STRING=mongodb://mongo:27017
       - REDIS_CONNECTION_STRING=redis:6379
+      # MongoDB is the periodic/final archive the grain flushes to (same db/collection QueryApi reads).
+      - Mongo__ConnectionString=mongodb://mongo:27017
+      - Mongo__Database=sports
+      - Mongo__Collection=matches
       # Scale-out tunables (Option 2). KAFKA_PARTITIONS should match the benchmark's -Partitions.
       # Run several pods to parallelize across partitions: `up -d --scale classifier-orleans=3`
       # (partitions are shared across all pods in the group, so keep partitions >= pods).
@@ -98,10 +105,14 @@ services:
       dockerfile: deploy/dotnet.Dockerfile
       args: { PROJECT: SportsPipeline.Sse, DLL: SportsPipeline.Sse.dll }
     environment:
+      # Default pipeline is Orleans, whose deltas arrive over Redis Pub/Sub — so the SSE app needs Redis.
+      - PipelineMode=Orleans
+      - Redis__ConnectionString=redis:6379
+      # Only used when PipelineMode=Flink (deltas over Kafka):
       - Sse__BootstrapServers=redpanda:9092
       - Sse__Topic=match-deltas
     ports: ["8080:8080"]
-    depends_on: [redpanda]
+    depends_on: [redpanda, redis]
 
   queryapi:
     build:

@@ -36,13 +36,12 @@ public class MatchGrainTests : IClassFixture<MatchGrainTests.ClusterFixture>
         public void Configure(ISiloBuilder siloBuilder)
         {
             siloBuilder.AddMemoryGrainStorageAsDefault();
-            siloBuilder.ConfigureServices(services => 
+            siloBuilder.ConfigureServices(services =>
             {
-                var mockPublisher = new Mock<IDeltaPublisher>();
-                services.AddSingleton(mockPublisher.Object);
-                
-                var mockInvalidator = new Mock<ICacheInvalidator>();
-                services.AddSingleton(mockInvalidator.Object);
+                services.AddSingleton(new Mock<IDeltaPublisher>().Object);
+                services.AddSingleton(new Mock<ILiveMatchStateStore>().Object);
+                services.AddSingleton(new Mock<IMatchDetailsStore>().Object);
+                services.AddSingleton(new Mock<IMatchSearchStore>().Object);
             });
         }
     }

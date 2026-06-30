@@ -1,24 +1,36 @@
+using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using OpenSearch.Client;
+using StackExchange.Redis;
 using SportsPipeline.Abstractions;
 using SportsPipeline.Infrastructure.Mongo;
 using SportsPipeline.Infrastructure.OpenSearch;
+using SportsPipeline.Infrastructure.Redis;
 using SportsPipeline.QueryApi.Models;
 using SportsPipeline.QueryApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenSearchMatchSearch(builder.Configuration);
-builder.Services.AddMongoMatchDetailsStore(builder.Configuration);
 
 var redisConnStr = builder.Configuration.GetValue<string>("Redis:ConnectionString") ?? "localhost:6379";
-builder.Services.AddStackExchangeRedisCache(options => 
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnStr));
+builder.Services.AddSingleton<ILiveMatchStateStore, RedisLiveMatchStateStore>();
+
+// Details store = Redis-live first, MongoDB archive on miss. In-progress matches are read from the
+// same Redis store they were notified from (always current); ended matches come from MongoDB.
+builder.Services.Configure<MongoOptions>(builder.Configuration.GetSection("Mongo"));
+builder.Services.AddSingleton<IMatchDetailsStore>(sp =>
 {
-    options.Configuration = redisConnStr;
-    options.InstanceName = "SportsPipeline:";
+    var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
+    var collection = new MongoClient(opts.ConnectionString)
+        .GetDatabase(opts.Database)
+        .GetCollection<BsonDocument>(opts.Collection);
+    var archive = new MongoMatchDetailsStore(collection);
+    var live = sp.GetRequiredService<ILiveMatchStateStore>();
+    return new RedisFirstMongoMatchDetailsStore(live, archive);
 });
-builder.Services.AddSingleton<CacheStampedeProtector>();
 
 var app = builder.Build();
 
@@ -43,21 +55,13 @@ app.MapGet("/matches", async (
     return Results.Json(summaries);
 });
 
-// -> not for this scope but AI already implemented
-// Details: point lookup by matchId (document id). 
-app.MapGet("/matches/{matchId}", async (string matchId, IMatchDetailsStore details, CacheStampedeProtector cache, CancellationToken ct) =>
+// Details: point lookup by matchId (document id).
+// Live matches resolve from Redis (the authoritative live store the classifier writes through before
+// notifying), so a user who acts on a push always reads the value that triggered it. Ended matches fall
+// back to the MongoDB archive. No long-lived caching here: Redis already is the fast, current store.
+app.MapGet("/matches/{matchId}", async (string matchId, IMatchDetailsStore details, CancellationToken ct) =>
 {
-    // Caching Strategy:
-    // We cache the result in Redis. For non-live matches, this effectively lives forever (or a very long TTL).
-    // For live matches, Orleans will actively INVALIDATE this cache key when a crucial stat (goal/card) occurs.
-    var cacheKey = $"match-details:{matchId}";
-    
-    // We use a 24-hour TTL by default, assuming matches end within that time or get updated.
-    var json = await cache.GetOrAddAsync(cacheKey, 
-        () => details.GetByIdAsync(matchId, ct), 
-        TimeSpan.FromHours(24), 
-        ct);
-
+    var json = await details.GetByIdAsync(matchId, ct);
     return json is null ? Results.NotFound() : Results.Content(json, "application/json");
 });
 

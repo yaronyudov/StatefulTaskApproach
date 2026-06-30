@@ -21,6 +21,7 @@
     <PackageVersion Include="MongoDB.Driver" Version="3.0.0" />
     <PackageVersion Include="MongoDB.Driver.Core" Version="2.24.0" />
     <PackageVersion Include="Microsoft.Orleans.Server" Version="8.2.0" />
+    <PackageVersion Include="Microsoft.Orleans.Persistence.Redis" Version="8.2.0" />
     <PackageVersion Include="Orleans.Providers.MongoDB" Version="8.2.0" />
     <!-- Test -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />

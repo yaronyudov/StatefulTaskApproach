@@ -12,12 +12,14 @@ See **[docs/architecture.md](docs/architecture.md)** for the full design (diagra
 CQRS read path, failure modes, AWS mapping).
 
 ```
-Providers → Scraper(s) → Kafka(ingested-events) → Flink(first vs not-first) → {
+Providers → Scraper(s) → Kafka(raw-events) → Validator → Kafka(validated-events) →
+  classifier (Flink OR Orleans, first vs not-first) → {
     first-match-events, not-first-match-events,
     match-deltas → SSE → subscribers,
-    OpenSearch(first = discovery), MongoDB(deltas = details)
+    OpenSearch(first = discovery),
+    live state → Redis (authoritative while in-progress) → MongoDB (archive at/after match end)
 }
-Query API: search OpenSearch (find matchId) → fetch MongoDB (details)
+Query API: search OpenSearch (find matchId) → fetch details (Redis if live, else MongoDB)
 ```
 
 ## Layout

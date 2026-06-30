@@ -25,9 +25,4 @@ public static class MongoServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddMongoCdcWorker(this IServiceCollection services)
-    {
-        services.AddHostedService<MongoCdcBackgroundService>();
-        return services;
-    }
 }

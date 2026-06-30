@@ -19,4 +19,19 @@ public sealed class KafkaOptions
     /// placed on Orleans/Mongo/Redis; per-match ordering is unaffected (same key stays sequential).
     /// </summary>
     public int MaxConcurrency { get; set; } = 256;
+
+    /// <summary>
+    /// Number of independent consumer loops to run in the same group within this process. Each loop
+    /// is a separate Kafka group member, so the broker assigns it a disjoint set of partitions —
+    /// partition-level parallelism on top of the per-key in-batch parallelism. Defaults to 1.
+    /// </summary>
+    public int ConsumerCount { get; set; } = 1;
+
+    /// <summary>
+    /// Desired partition count for the validated-events topic. When &gt; 1 the consumer ensures the
+    /// topic exists with this many partitions at startup (create-if-missing). 1 means "leave the
+    /// topic as-is" (broker auto-creation). More partitions is what lets multiple consumers/pods
+    /// process the stream in parallel while each match stays on a single ordered partition.
+    /// </summary>
+    public int Partitions { get; set; } = 1;
 }

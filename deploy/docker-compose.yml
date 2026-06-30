@@ -82,6 +82,13 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
       - MONGO_CONNECTION_STRING=mongodb://mongo:27017
       - REDIS_CONNECTION_STRING=redis:6379
+      # Scale-out tunables (Option 2). KAFKA_PARTITIONS should match the benchmark's -Partitions.
+      # Run several pods to parallelize across partitions: `up -d --scale classifier-orleans=3`
+      # (partitions are shared across all pods in the group, so keep partitions >= pods).
+      - KAFKA_PARTITIONS=12
+      - KAFKA_CONSUMER_COUNT=4
+      - KAFKA_MAX_CONCURRENCY=256
+      - KAFKA_BATCH_SIZE=1000
     depends_on: [redpanda, mongo, redis]
     profiles: ["orleans"]
 

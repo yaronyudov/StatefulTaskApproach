@@ -31,6 +31,16 @@ builder.ConfigureServices((hostContext, services) =>
     services.Configure<KafkaOptions>(options =>
     {
         options.BootstrapServers = Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP_SERVERS") ?? "localhost:9092";
+
+        // Throughput / scale-out tunables (all optional; sensible defaults live in KafkaOptions).
+        if (int.TryParse(Environment.GetEnvironmentVariable("KAFKA_BATCH_SIZE"), out var batchSize))
+            options.BatchSize = batchSize;
+        if (int.TryParse(Environment.GetEnvironmentVariable("KAFKA_MAX_CONCURRENCY"), out var maxConcurrency))
+            options.MaxConcurrency = maxConcurrency;
+        if (int.TryParse(Environment.GetEnvironmentVariable("KAFKA_CONSUMER_COUNT"), out var consumerCount))
+            options.ConsumerCount = consumerCount;
+        if (int.TryParse(Environment.GetEnvironmentVariable("KAFKA_PARTITIONS"), out var partitions))
+            options.Partitions = partitions;
     });
 
     services.AddOpenSearchMatchSearch(hostContext.Configuration);

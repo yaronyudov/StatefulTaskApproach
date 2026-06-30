@@ -1,6 +1,7 @@
 param(
     [int]$TotalEvents = 100000,
-    [int]$UniqueMatches = 5000
+    [int]$UniqueMatches = 5000,
+    [int]$Partitions = 12
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,7 +39,12 @@ function Run-Benchmark {
     
     Write-Host "      Waiting for Kafka..." -ForegroundColor Yellow
     Start-Sleep -Seconds 5
-    
+
+    # 2b. Pre-create the topic with N partitions BEFORE any producer runs, so matches fan out across
+    #     partitions (the producer would otherwise auto-create it with a single partition).
+    Write-Host "      Creating topic 'validated-events' with $Partitions partitions..." -ForegroundColor Yellow
+    docker compose -f deploy/docker-compose.yml exec -T redpanda rpk topic create validated-events -p $Partitions 2>&1 | Out-Null
+
     # 3. Inject Data
     Write-Host "[3/5] Injecting $TotalEvents events using LoadTester container..." -ForegroundColor Yellow
     docker build -t loadtester -f tests/SportsPipeline.LoadTester/Dockerfile . | Out-Host

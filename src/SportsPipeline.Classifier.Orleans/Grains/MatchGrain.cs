@@ -60,6 +60,7 @@ public class MatchGrain : Grain<MatchGrainState>, IMatchGrain
 
     private bool _isDirty;                                 // has un-archived (Mongo) state
     private string? _lastDetailsJson;                      // last read-model written (Redis == Mongo content)
+    private bool _discoveryIndexed;                         // OpenSearch discovery confirmed (re-derived per activation)
     private IDisposable? _flushTimer;
 
     public MatchGrain(
@@ -86,6 +87,13 @@ public class MatchGrain : Grain<MatchGrainState>, IMatchGrain
         // per event. Live reads are served from Redis, so this archive lag is invisible to users.
         _flushTimer = this.RegisterGrainTimer(async () =>
         {
+            // Self-heal discovery: if the first-event index failed (or we just recovered from a crash),
+            // re-assert it. IndexAsync is an idempotent upsert by matchId, so retrying is safe.
+            if (!_discoveryIndexed && State.Metadata != null)
+            {
+                await TryIndexDiscoveryAsync();
+            }
+
             if (_isDirty)
             {
                 await FlushToArchiveAsync();
@@ -141,8 +149,8 @@ public class MatchGrain : Grain<MatchGrainState>, IMatchGrain
             State.ActiveWindows.Add(window);
 
             // Discovery is written immediately and DIRECTLY to OpenSearch on first sight of a match
-            // (no longer via Mongo change streams), so it appears without waiting for the Mongo archive.
-            await _search.IndexAsync(sportEvent.MatchKey, BuildDiscoveryJson());
+            // (no longer via Mongo change streams). Best-effort: if it fails the flush timer retries.
+            await TryIndexDiscoveryAsync();
 
             // Live read-model + durable grain state (Redis). Mongo is archived later by the timer.
             await PersistAsync(window);
@@ -241,6 +249,24 @@ public class MatchGrain : Grain<MatchGrainState>, IMatchGrain
             lastUpdated = DateTimeOffset.UtcNow
         };
         return JsonSerializer.Serialize(details);
+    }
+
+    /// <summary>
+    /// Best-effort discovery index. Never throws: OpenSearch being briefly down must not drop the event
+    /// or the match. On failure the flush timer re-asserts it (IndexAsync is an idempotent upsert by
+    /// matchId), which also covers re-indexing after a silo crash resets <see cref="_discoveryIndexed"/>.
+    /// </summary>
+    private async Task TryIndexDiscoveryAsync()
+    {
+        try
+        {
+            await _search.IndexAsync(this.GetPrimaryKeyString(), BuildDiscoveryJson());
+            _discoveryIndexed = true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Discovery index failed for {MatchKey}; will retry on next flush", this.GetPrimaryKeyString());
+        }
     }
 
     /// <summary>The minimal discovery document indexed in OpenSearch (find-the-match).</summary>
